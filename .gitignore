@@ -18,6 +18,9 @@ npm-debug.log*
 # Environment files (contain secrets)
 backend/.env
 
+# Temp files
+backend/temp_photo.jpg
+
 # IDE
 .cursor/
 .vscode/

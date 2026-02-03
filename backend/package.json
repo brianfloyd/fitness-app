@@ -14,6 +14,7 @@
     "migrate-foods-table": "node src/run-foods-table-migration.js",
     "migrate-barcode": "node src/run-barcode-migration.js",
     "migrate-profiles": "node src/run-profiles-migration.js",
+    "migrate-all": "node src/run-all-migrations.js",
     "import-macrofactor": "node src/scripts/import-macrofactor.js"
   },
   "keywords": [],

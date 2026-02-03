@@ -1,0 +1,5 @@
+{
+  "name": "fitness-app",
+  "private": true,
+  "description": "Fitness daily log tracking - monorepo (frontend + backend)"
+}
