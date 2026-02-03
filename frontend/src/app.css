@@ -1,0 +1,239 @@
+:root {
+  --primary-color: #3b82f6;
+  --primary-hover: #2563eb;
+  --secondary-color: #8b5cf6;
+  --accent-color: #10b981;
+  --background: #0f172a;
+  --surface: #1e293b;
+  --surface-elevated: #334155;
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --border: #334155;
+  --border-light: #475569;
+  --border-radius: 12px;
+  --border-radius-sm: 8px;
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  overflow-x: hidden;
+  width: 100%;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  background-color: var(--background);
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.1) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.1) 0px, transparent 50%);
+  color: var(--text-primary);
+  line-height: 1.6;
+  min-height: 100vh;
+  min-height: -webkit-fill-available; /* iOS Safari */
+  overflow-x: hidden;
+  width: 100%;
+  position: relative;
+  /* Safe area insets for notched devices */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+#app {
+  min-height: 100vh;
+  min-height: -webkit-fill-available; /* iOS Safari */
+  padding: var(--spacing-md);
+  padding-top: calc(var(--spacing-md) + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom, 0px));
+  padding-left: calc(var(--spacing-md) + env(safe-area-inset-left, 0px));
+  padding-right: calc(var(--spacing-md) + env(safe-area-inset-right, 0px));
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* Mobile-first responsive */
+@media (min-width: 768px) {
+  #app {
+    padding: var(--spacing-xl);
+  }
+}
+
+/* Ensure padding doesn't cause overflow on mobile */
+@media (max-width: 767px) {
+  #app {
+    padding-left: var(--spacing-sm);
+    padding-right: var(--spacing-sm);
+  }
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  border-radius: var(--border-radius-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background-color: var(--primary-color);
+  color: white;
+  font-size: 1rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-sm);
+}
+
+button:hover {
+  background-color: var(--primary-hover);
+  box-shadow: var(--shadow);
+  transform: translateY(-1px);
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+button:disabled {
+  background-color: var(--surface-elevated);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
+}
+
+input, textarea, select {
+  font-family: inherit;
+  font-size: 1rem;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--border);
+  border-radius: var(--border-radius-sm);
+  background-color: var(--surface);
+  color: var(--text-primary);
+  width: 100%;
+  transition: all 0.2s ease;
+}
+
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  background-color: var(--surface-elevated);
+}
+
+input::placeholder, textarea::placeholder {
+  color: var(--text-muted);
+}
+
+input[readonly] {
+  background-color: var(--surface);
+  cursor: default;
+  opacity: 0.7;
+}
+
+label {
+  display: block;
+  margin-bottom: var(--spacing-xs);
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.card {
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow);
+  margin-bottom: var(--spacing-md);
+  transition: all 0.2s ease;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.card:hover {
+  box-shadow: var(--shadow-lg);
+  border-color: var(--border-light);
+}
+
+.grid {
+  display: grid;
+  gap: var(--spacing-md);
+}
+
+.grid-2 {
+  grid-template-columns: 1fr;
+}
+
+.grid-3 {
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 640px) {
+  .grid-2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Prevent horizontal overflow on media elements */
+img, video, iframe, embed, object {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Mobile-specific overflow prevention */
+@media (max-width: 768px) {
+  html, body {
+    overflow-x: hidden;
+    position: relative;
+    width: 100%;
+  }
+  
+  #app, main {
+    overflow-x: hidden;
+    position: relative;
+    width: 100%;
+    max-width: 100vw;
+  }
+  
+  /* Ensure all containers respect viewport width */
+  * {
+    box-sizing: border-box;
+  }
+  
+  /* Prevent fixed-width elements from causing overflow */
+  .form-section,
+  .form-row,
+  .photo-section,
+  .workout-section {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+}

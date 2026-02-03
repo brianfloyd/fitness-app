@@ -1,0 +1,15 @@
+{
+  "name": "@fitness/mcp-db",
+  "version": "1.0.0",
+  "description": "MCP server for Fitness app PostgreSQL query and update tools",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "pg": "^8.11.3",
+    "dotenv": "^16.3.1"
+  }
+}
