@@ -20,7 +20,8 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
   ? [
       ...(process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim()) : []),
       ...(process.env.RAILWAY_PUBLIC_DOMAIN ? [`https://${process.env.RAILWAY_PUBLIC_DOMAIN}`] : []),
-    ].filter(Boolean);
+    ].filter(Boolean)
+  : [];
 app.use(
   cors(
     allowedOrigins.length
