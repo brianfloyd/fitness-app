@@ -1,6 +1,7 @@
 <script>
   import { createEventDispatcher, onMount } from 'svelte';
-  
+  import 'cropperjs/dist/cropper.css';
+
   export let currentPhotoUrl = null;
   export let photoMimeType = null;
   export let goalPhotoUrl = null; // AI goal photo URL
@@ -22,11 +23,6 @@
     if (!CropperLib) {
       const module = await import('cropperjs');
       CropperLib = module.default;
-      // Also load CSS
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = '/node_modules/cropperjs/dist/cropper.css';
-      document.head.appendChild(link);
     }
     return CropperLib;
   }

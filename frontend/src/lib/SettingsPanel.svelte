@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import 'cropperjs/dist/cropper.css';
   import { getSettings, updateSettings, getGoalPhotoUrl } from '../lib/api.js';
   
   let loading = true;
@@ -43,13 +44,6 @@
     if (!GoalCropperLib) {
       const module = await import('cropperjs');
       GoalCropperLib = module.default;
-      // Also load CSS if not already loaded
-      if (!document.querySelector('link[href*="cropper.css"]')) {
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = '/node_modules/cropperjs/dist/cropper.css';
-        document.head.appendChild(link);
-      }
     }
     return GoalCropperLib;
   }
