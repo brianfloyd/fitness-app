@@ -13,6 +13,7 @@
 **Naming Pattern:** Descriptive name with underscores
 - Example: `add_foods_column.sql`
 - Example: `add_goal_photo_to_settings.sql`
+- Example: `add_profile_id_to_tables.sql` (multi-tenant: profile_id on app_settings, daily_logs, foods)
 
 ---
 

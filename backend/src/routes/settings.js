@@ -12,15 +12,16 @@ const upload = multer({
   },
 });
 
-// Get current app settings
+// Get current app settings (scoped to profile)
 router.get('/', async (req, res) => {
   try {
+    const profileId = req.profileId;
     const result = await pool.query(
-      'SELECT * FROM app_settings ORDER BY id DESC LIMIT 1'
+      'SELECT * FROM app_settings WHERE profile_id = $1 ORDER BY id DESC LIMIT 1',
+      [profileId]
     );
     
     if (result.rows.length === 0) {
-      // Return default settings if none exist
       return res.json({
         total_days: 84,
         start_date: new Date().toISOString().split('T')[0],
@@ -63,9 +64,10 @@ router.put('/', upload.single('goal_photo'), async (req, res) => {
       return res.status(400).json({ error: 'total_days and start_date are required' });
     }
     
-    // Check if settings exist
+    const profileId = req.profileId;
     const existing = await pool.query(
-      'SELECT * FROM app_settings ORDER BY id DESC LIMIT 1'
+      'SELECT * FROM app_settings WHERE profile_id = $1 ORDER BY id DESC LIMIT 1',
+      [profileId]
     );
     
     let result;
@@ -73,27 +75,24 @@ router.put('/', upload.single('goal_photo'), async (req, res) => {
     const photoMimeType = req.file ? req.file.mimetype : null;
     
     if (existing.rows.length === 0) {
-      // Insert new settings
       if (photo) {
         result = await pool.query(
-          'INSERT INTO app_settings (total_days, start_date, goal_photo, goal_photo_mime_type) VALUES ($1, $2, $3, $4) RETURNING id, total_days, start_date, goal_photo_mime_type',
-          [total_days, start_date, photo, photoMimeType]
+          'INSERT INTO app_settings (profile_id, total_days, start_date, goal_photo, goal_photo_mime_type) VALUES ($1, $2, $3, $4, $5) RETURNING id, total_days, start_date, goal_photo_mime_type',
+          [profileId, total_days, start_date, photo, photoMimeType]
         );
       } else {
         result = await pool.query(
-          'INSERT INTO app_settings (total_days, start_date) VALUES ($1, $2) RETURNING id, total_days, start_date, goal_photo_mime_type',
-          [total_days, start_date]
+          'INSERT INTO app_settings (profile_id, total_days, start_date) VALUES ($1, $2, $3) RETURNING id, total_days, start_date, goal_photo_mime_type',
+          [profileId, total_days, start_date]
         );
       }
     } else {
-      // Update existing settings
       if (photo) {
         result = await pool.query(
           'UPDATE app_settings SET total_days = $1, start_date = $2, goal_photo = $3, goal_photo_mime_type = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5 RETURNING id, total_days, start_date, goal_photo_mime_type',
           [total_days, start_date, photo, photoMimeType, existing.rows[0].id]
         );
       } else {
-        // Only update if goal_photo is not being cleared (if photo not provided, don't update photo fields)
         result = await pool.query(
           'UPDATE app_settings SET total_days = $1, start_date = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 RETURNING id, total_days, start_date, goal_photo_mime_type',
           [total_days, start_date, existing.rows[0].id]
@@ -128,11 +127,13 @@ router.put('/', upload.single('goal_photo'), async (req, res) => {
   }
 });
 
-// Get current day number calculation
+// Get current day number calculation (scoped to profile)
 router.get('/current-day', async (req, res) => {
   try {
+    const profileId = req.profileId;
     const settingsResult = await pool.query(
-      'SELECT * FROM app_settings ORDER BY id DESC LIMIT 1'
+      'SELECT * FROM app_settings WHERE profile_id = $1 ORDER BY id DESC LIMIT 1',
+      [profileId]
     );
     
     if (settingsResult.rows.length === 0) {
@@ -171,11 +172,13 @@ router.get('/current-day', async (req, res) => {
   }
 });
 
-// Get goal photo
+// Get goal photo (scoped to profile)
 router.get('/goal-photo', async (req, res) => {
   try {
+    const profileId = req.profileId;
     const result = await pool.query(
-      'SELECT goal_photo, goal_photo_mime_type FROM app_settings ORDER BY id DESC LIMIT 1'
+      'SELECT goal_photo, goal_photo_mime_type FROM app_settings WHERE profile_id = $1 ORDER BY id DESC LIMIT 1',
+      [profileId]
     );
     
     if (result.rows.length === 0 || !result.rows[0].goal_photo) {
@@ -191,11 +194,13 @@ router.get('/goal-photo', async (req, res) => {
   }
 });
 
-// Delete goal photo
+// Delete goal photo (scoped to profile)
 router.delete('/goal-photo', async (req, res) => {
   try {
+    const profileId = req.profileId;
     const result = await pool.query(
-      'UPDATE app_settings SET goal_photo = NULL, goal_photo_mime_type = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = (SELECT id FROM app_settings ORDER BY id DESC LIMIT 1) RETURNING id'
+      'UPDATE app_settings SET goal_photo = NULL, goal_photo_mime_type = NULL, updated_at = CURRENT_TIMESTAMP WHERE profile_id = $1 RETURNING id',
+      [profileId]
     );
     
     if (result.rows.length === 0) {

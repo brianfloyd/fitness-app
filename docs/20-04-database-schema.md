@@ -12,13 +12,15 @@
 **Schema File:** `database/schema.sql`  
 **Connection:** `backend/src/db/connection.js`
 
+**Multi-tenant:** Data is scoped by profile (user). Tables `app_settings`, `daily_logs`, and `foods` (custom only) include `profile_id` referencing `profiles(id)`. Each profile has separate settings, logs, and custom foods. USDA food cache (`foods` with `source = 'usda'`) is shared (`profile_id` NULL). See migration `add_profile_id_to_tables.sql`.
+
 ---
 
 ## 2. Table Definitions
 
 ### **2.1 app_settings Table**
 
-**Purpose:** Stores application-wide configuration settings.
+**Purpose:** Per-profile configuration (total_days, start_date, goal photo). One row per profile.
 
 **Schema:**
 ```sql
@@ -100,11 +102,13 @@ CREATE TABLE IF NOT EXISTS daily_logs (
 - `updated_at` - Record update timestamp
 
 **Constraints:**
-- `date` - UNIQUE, NOT NULL, DEFAULT CURRENT_DATE
+- `profile_id` - NOT NULL, FK to profiles(id)
+- `(profile_id, date)` - UNIQUE (one log per profile per date)
 - All metric fields are optional (nullable)
 
 **Indexes:**
-- `idx_daily_logs_date` - Index on `date` for faster lookups
+- `idx_daily_logs_profile_date` - UNIQUE(profile_id, date)
+- `idx_daily_logs_profile_id` - Index on profile_id
 
 **Food entries (TEXT JSON):** Each item may include `fdcId` (USDA) or `customFoodId` (custom). Custom entries also store `customFood` (serving_size, serving_unit, calories, protein, fat, carbs) for macro scaling.
 
@@ -166,12 +170,17 @@ Used for precise numeric values:
 
 ## 4. Relationships
 
-### **4.1 app_settings to daily_logs**
+### **4.1 profiles to app_settings, daily_logs, foods**
 
-**Relationship:** One-to-many (indirect)
-- `app_settings.start_date` used to calculate `daily_logs.day_number`
-- `app_settings.total_days` used for progress calculation
-- No foreign key constraint (calculated relationship)
+**Relationship:** One-to-many
+- `app_settings.profile_id` → `profiles.id` (one settings row per profile)
+- `daily_logs.profile_id` → `profiles.id` (logs scoped by profile)
+- `foods.profile_id` → `profiles.id` (custom foods only; USDA rows have profile_id NULL)
+
+### **4.2 app_settings to daily_logs**
+
+**Relationship:** Indirect (same profile)
+- `app_settings.start_date` and `total_days` for a profile are used to calculate `daily_logs.day_number` for that profile
 
 ---
 

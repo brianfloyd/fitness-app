@@ -12,42 +12,38 @@ const upload = multer({
   },
 });
 
-// Helper function to calculate day number
-async function calculateDayNumber(date) {
+// Helper: calculate day number for a profile and date
+async function calculateDayNumber(profileId, date) {
   const settingsResult = await pool.query(
-    'SELECT * FROM app_settings ORDER BY id DESC LIMIT 1'
+    'SELECT * FROM app_settings WHERE profile_id = $1 ORDER BY id DESC LIMIT 1',
+    [profileId]
   );
-  
-  if (settingsResult.rows.length === 0) {
-    return 1;
-  }
-  
+  if (settingsResult.rows.length === 0) return 1;
   const settings = settingsResult.rows[0];
   const startDate = new Date(settings.start_date);
   const logDate = new Date(date);
   startDate.setHours(0, 0, 0, 0);
   logDate.setHours(0, 0, 0, 0);
-  
   const diffTime = logDate - startDate;
   const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
   const dayNumber = diffDays + 1;
-  
   return Math.max(1, Math.min(dayNumber, settings.total_days));
 }
 
-// Get all logs (paginated)
+// Get all logs (paginated, scoped to profile)
 router.get('/', async (req, res) => {
   try {
+    const profileId = req.profileId;
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 30;
     const offset = (page - 1) * limit;
     
     const result = await pool.query(
-      'SELECT id, date, day_number, photo_mime_type, weight, fat_percent, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps, created_at, updated_at FROM daily_logs ORDER BY date DESC LIMIT $1 OFFSET $2',
-      [limit, offset]
+      'SELECT id, date, day_number, photo_mime_type, weight, fat_percent, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps, created_at, updated_at FROM daily_logs WHERE profile_id = $1 ORDER BY date DESC LIMIT $2 OFFSET $3',
+      [profileId, limit, offset]
     );
     
-    const countResult = await pool.query('SELECT COUNT(*) FROM daily_logs');
+    const countResult = await pool.query('SELECT COUNT(*) FROM daily_logs WHERE profile_id = $1', [profileId]);
     
     res.json({
       logs: result.rows,
@@ -65,18 +61,17 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Get logs by date range (for graphing)
+// Get logs by date range (scoped to profile)
 router.get('/range', async (req, res) => {
   try {
+    const profileId = req.profileId;
     const { startDate, endDate } = req.query;
-    
     if (!startDate || !endDate) {
       return res.status(400).json({ error: 'startDate and endDate query parameters are required' });
     }
-    
     const result = await pool.query(
-      'SELECT id, date, day_number, photo_mime_type, weight, fat_percent, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps, created_at, updated_at FROM daily_logs WHERE date >= $1 AND date <= $2 ORDER BY date ASC',
-      [startDate, endDate]
+      'SELECT id, date, day_number, photo_mime_type, weight, fat_percent, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps, created_at, updated_at FROM daily_logs WHERE profile_id = $1 AND date >= $2 AND date <= $3 ORDER BY date ASC',
+      [profileId, startDate, endDate]
     );
     
     res.json(result.rows);
@@ -90,20 +85,21 @@ router.get('/range', async (req, res) => {
   }
 });
 
-// Get log for specific date
+// Get log for specific date (scoped to profile)
 router.get('/:date', async (req, res) => {
   try {
+    const profileId = req.profileId;
     const { date } = req.params;
-      const result = await pool.query(
-        'SELECT id, date, day_number, photo_mime_type, weight, fat_percent, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps, created_at, updated_at FROM daily_logs WHERE date = $1',
-        [date]
-      );
+    const result = await pool.query(
+      'SELECT id, date, day_number, photo_mime_type, weight, fat_percent, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps, created_at, updated_at FROM daily_logs WHERE profile_id = $1 AND date = $2',
+      [profileId, date]
+    );
     
     if (result.rows.length === 0) {
-      // Calculate day number for this date even if log doesn't exist
-      const dayNumber = await calculateDayNumber(date);
+      const dayNumber = await calculateDayNumber(profileId, date);
       const settingsResult = await pool.query(
-        'SELECT total_days FROM app_settings ORDER BY id DESC LIMIT 1'
+        'SELECT total_days FROM app_settings WHERE profile_id = $1 ORDER BY id DESC LIMIT 1',
+        [profileId]
       );
       const totalDays = settingsResult.rows[0]?.total_days || 84;
       
@@ -127,14 +123,11 @@ router.get('/:date', async (req, res) => {
     
     const log = result.rows[0];
     const settingsResult = await pool.query(
-      'SELECT total_days FROM app_settings ORDER BY id DESC LIMIT 1'
+      'SELECT total_days FROM app_settings WHERE profile_id = $1 ORDER BY id DESC LIMIT 1',
+      [profileId]
     );
     const totalDays = settingsResult.rows[0]?.total_days || 84;
-    
-    res.json({
-      ...log,
-      total_days: totalDays,
-    });
+    res.json({ ...log, total_days: totalDays });
   } catch (error) {
     console.error('Error fetching log:', error);
     console.error('Error stack:', error.stack);
@@ -145,18 +138,19 @@ router.get('/:date', async (req, res) => {
   }
 });
 
-// Get today's log
+// Get today's log (scoped to profile)
 router.get('/today', async (req, res) => {
   try {
+    const profileId = req.profileId;
     const today = new Date().toISOString().split('T')[0];
     const result = await pool.query(
-      'SELECT id, date, day_number, photo_mime_type, weight, fat_percent, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps, created_at, updated_at FROM daily_logs WHERE date = $1',
-      [today]
+      'SELECT id, date, day_number, photo_mime_type, weight, fat_percent, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps, created_at, updated_at FROM daily_logs WHERE profile_id = $1 AND date = $2',
+      [profileId, today]
     );
-    
-    const dayNumber = await calculateDayNumber(today);
+    const dayNumber = await calculateDayNumber(profileId, today);
     const settingsResult = await pool.query(
-      'SELECT total_days FROM app_settings ORDER BY id DESC LIMIT 1'
+      'SELECT total_days FROM app_settings WHERE profile_id = $1 ORDER BY id DESC LIMIT 1',
+      [profileId]
     );
     const totalDays = settingsResult.rows[0]?.total_days || 84;
     
@@ -189,9 +183,10 @@ router.get('/today', async (req, res) => {
   }
 });
 
-// Create or update log entry
+// Create or update log entry (scoped to profile)
 router.post('/', upload.single('photo'), async (req, res) => {
   try {
+    const profileId = req.profileId;
     const {
       date,
       weight,
@@ -206,14 +201,11 @@ router.post('/', upload.single('photo'), async (req, res) => {
       strava,
       steps,
     } = req.body;
-    
     const logDate = date || new Date().toISOString().split('T')[0];
-    const dayNumber = await calculateDayNumber(logDate);
-    
-    // Check if log exists for this date
+    const dayNumber = await calculateDayNumber(profileId, logDate);
     const existing = await pool.query(
-      'SELECT id FROM daily_logs WHERE date = $1',
-      [logDate]
+      'SELECT id FROM daily_logs WHERE profile_id = $1 AND date = $2',
+      [profileId, logDate]
     );
     
     let photo = null;
@@ -226,18 +218,17 @@ router.post('/', upload.single('photo'), async (req, res) => {
     
     let result;
     if (existing.rows.length > 0) {
-      // Update existing log
       if (photo) {
         result = await pool.query(
           `UPDATE daily_logs 
            SET day_number = $1, photo = $2, photo_mime_type = $3, weight = $4, fat_percent = $5, 
                workout = $6, protein = $7, fat = $8, carbs = $9, foods = $10, sleep_time = $11, 
                sleep_score = $12, strava = $13, steps = $14, updated_at = CURRENT_TIMESTAMP
-           WHERE date = $15
+           WHERE profile_id = $15 AND date = $16
            RETURNING id, date, day_number, photo_mime_type, weight, fat_percent, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps`,
           [dayNumber, photo, photoMimeType, weight || null, fat_percent || null, workout || null,
            protein || null, fat || null, carbs || null, foods || null, sleep_time || null, sleep_score || null,
-           strava || null, steps || null, logDate]
+           strava || null, steps || null, profileId, logDate]
         );
       } else {
         result = await pool.query(
@@ -245,27 +236,26 @@ router.post('/', upload.single('photo'), async (req, res) => {
            SET day_number = $1, weight = $2, fat_percent = $3, workout = $4, protein = $5, 
                fat = $6, carbs = $7, foods = $8, sleep_time = $9, sleep_score = $10, strava = $11, 
                steps = $12, updated_at = CURRENT_TIMESTAMP
-           WHERE date = $13
+           WHERE profile_id = $13 AND date = $14
            RETURNING id, date, day_number, photo_mime_type, weight, fat_percent, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps`,
           [dayNumber, weight || null, fat_percent || null, workout || null, protein || null,
            fat || null, carbs || null, foods || null, sleep_time || null, sleep_score || null, strava || null,
-           steps || null, logDate]
+           steps || null, profileId, logDate]
         );
       }
     } else {
-      // Create new log
       result = await pool.query(
-        `INSERT INTO daily_logs (date, day_number, photo, photo_mime_type, weight, fat_percent, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        `INSERT INTO daily_logs (profile_id, date, day_number, photo, photo_mime_type, weight, fat_percent, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
          RETURNING id, date, day_number, photo_mime_type, weight, fat_percent, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps`,
-        [logDate, dayNumber, photo, photoMimeType, weight || null, fat_percent || null, workout || null,
+        [profileId, logDate, dayNumber, photo, photoMimeType, weight || null, fat_percent || null, workout || null,
          protein || null, fat || null, carbs || null, foods || null, sleep_time || null, sleep_score || null,
          strava || null, steps || null]
       );
     }
-    
     const settingsResult = await pool.query(
-      'SELECT total_days FROM app_settings ORDER BY id DESC LIMIT 1'
+      'SELECT total_days FROM app_settings WHERE profile_id = $1 ORDER BY id DESC LIMIT 1',
+      [profileId]
     );
     const totalDays = settingsResult.rows[0]?.total_days || 84;
     
@@ -283,9 +273,10 @@ router.post('/', upload.single('photo'), async (req, res) => {
   }
 });
 
-// Update existing log
+// Update existing log (scoped to profile)
 router.put('/:date', upload.single('photo'), async (req, res) => {
   try {
+    const profileId = req.profileId;
     const { date } = req.params;
     const {
       weight,
@@ -300,13 +291,10 @@ router.put('/:date', upload.single('photo'), async (req, res) => {
       strava,
       steps,
     } = req.body;
-    
-    const dayNumber = await calculateDayNumber(date);
-    
-    // Check if log exists
+    const dayNumber = await calculateDayNumber(profileId, date);
     const existing = await pool.query(
-      'SELECT id FROM daily_logs WHERE date = $1',
-      [date]
+      'SELECT id FROM daily_logs WHERE profile_id = $1 AND date = $2',
+      [profileId, date]
     );
     
     if (existing.rows.length === 0) {
@@ -315,35 +303,33 @@ router.put('/:date', upload.single('photo'), async (req, res) => {
     
     let result;
     if (req.file) {
-      // Update with new photo
       result = await pool.query(
         `UPDATE daily_logs 
          SET day_number = $1, photo = $2, photo_mime_type = $3, weight = $4, fat_percent = $5, 
              workout = $6, protein = $7, fat = $8, carbs = $9, foods = $10, sleep_time = $11, 
              sleep_score = $12, strava = $13, steps = $14, updated_at = CURRENT_TIMESTAMP
-         WHERE date = $15
+         WHERE profile_id = $15 AND date = $16
          RETURNING id, date, day_number, photo_mime_type, weight, fat_percent, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps`,
         [dayNumber, req.file.buffer, req.file.mimetype, weight || null, fat_percent || null, workout || null,
          protein || null, fat || null, carbs || null, foods || null, sleep_time || null, sleep_score || null,
-         strava || null, steps || null, date]
+         strava || null, steps || null, profileId, date]
       );
     } else {
-      // Update without changing photo
       result = await pool.query(
         `UPDATE daily_logs 
          SET day_number = $1, weight = $2, fat_percent = $3, workout = $4, protein = $5, 
              fat = $6, carbs = $7, foods = $8, sleep_time = $9, sleep_score = $10, strava = $11, 
              steps = $12, updated_at = CURRENT_TIMESTAMP
-         WHERE date = $13
+         WHERE profile_id = $13 AND date = $14
          RETURNING id, date, day_number, photo_mime_type, weight, fat_percent, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps`,
         [dayNumber, weight || null, fat_percent || null, workout || null, protein || null,
          fat || null, carbs || null, foods || null, sleep_time || null, sleep_score || null, strava || null,
-         steps || null, date]
+         steps || null, profileId, date]
       );
     }
-    
     const settingsResult = await pool.query(
-      'SELECT total_days FROM app_settings ORDER BY id DESC LIMIT 1'
+      'SELECT total_days FROM app_settings WHERE profile_id = $1 ORDER BY id DESC LIMIT 1',
+      [profileId]
     );
     const totalDays = settingsResult.rows[0]?.total_days || 84;
     
@@ -357,13 +343,14 @@ router.put('/:date', upload.single('photo'), async (req, res) => {
   }
 });
 
-// Get photo for specific date
+// Get photo for specific date (scoped to profile)
 router.get('/:date/photo', async (req, res) => {
   try {
+    const profileId = req.profileId;
     const { date } = req.params;
     const result = await pool.query(
-      'SELECT photo, photo_mime_type FROM daily_logs WHERE date = $1',
-      [date]
+      'SELECT photo, photo_mime_type FROM daily_logs WHERE profile_id = $1 AND date = $2',
+      [profileId, date]
     );
     
     if (result.rows.length === 0 || !result.rows[0].photo) {
@@ -379,11 +366,13 @@ router.get('/:date/photo', async (req, res) => {
   }
 });
 
-// Get all previously used foods from all logs (USDA by fdcId, custom by customFoodId)
+// Get previously used foods from this profile's logs
 router.get('/foods/used', async (req, res) => {
   try {
+    const profileId = req.profileId;
     const result = await pool.query(
-      'SELECT foods FROM daily_logs WHERE foods IS NOT NULL AND foods != \'\''
+      'SELECT foods FROM daily_logs WHERE profile_id = $1 AND foods IS NOT NULL AND foods != \'\'',
+      [profileId]
     );
     
     const usedFoodsMap = new Map();

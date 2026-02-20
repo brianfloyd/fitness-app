@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync } from 'fs';
 import dotenv from 'dotenv';
+import { requireProfileId } from './middleware/requireProfileId.js';
 import dailyLogsRoutes from './routes/dailyLogs.js';
 import settingsRoutes from './routes/settings.js';
 import stravaRoutes from './routes/strava.js';
@@ -45,11 +46,11 @@ app.use((req, res, next) => {
   next();
 });
 
-// Routes
-app.use('/api/logs', dailyLogsRoutes);
-app.use('/api/settings', settingsRoutes);
-app.use('/api/strava', stravaRoutes);
-app.use('/api/foods', foodsRoutes);
+// Routes (logs, settings, foods require X-Profile-Id for multi-tenant scoping)
+app.use('/api/logs', requireProfileId, dailyLogsRoutes);
+app.use('/api/settings', requireProfileId, settingsRoutes);
+app.use('/api/strava', requireProfileId, stravaRoutes);
+app.use('/api/foods', requireProfileId, foodsRoutes);
 app.use('/api/profiles', profilesRoutes);
 
 // Health check

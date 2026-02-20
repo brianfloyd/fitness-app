@@ -111,24 +111,25 @@ router.get('/search', async (req, res) => {
       carbs: r.carbs != null ? parseFloat(r.carbs) : null,
     });
 
+    const profileId = req.profileId;
     if (searchQuery.length >= 2) {
       try {
         if (gtin && searchQuery.length >= 8) {
           const bc = searchQuery.replace(/^0+/, '');
           const byBarcode = await pool.query(
             `SELECT id, name, brand, barcode, serving_size, serving_unit, calories, protein, fat, carbs
-             FROM foods WHERE source = 'custom' AND (barcode = $1 OR barcode = '0' || $1)
+             FROM foods WHERE source = 'custom' AND profile_id = $1 AND (barcode = $2 OR barcode = '0' || $2)
              ORDER BY name LIMIT 20`,
-            [bc]
+            [profileId, bc]
           );
           customFoods = (byBarcode.rows || []).map(mapRow);
         }
         if (!gtin) {
           const byName = await pool.query(
             `SELECT id, name, brand, barcode, serving_size, serving_unit, calories, protein, fat, carbs
-             FROM foods WHERE source = 'custom' AND (LOWER(name) LIKE $1 OR (brand IS NOT NULL AND LOWER(brand) LIKE $1))
+             FROM foods WHERE source = 'custom' AND profile_id = $1 AND (LOWER(name) LIKE $2 OR (brand IS NOT NULL AND LOWER(brand) LIKE $2))
              ORDER BY name LIMIT 20`,
-            ['%' + searchQuery.toLowerCase() + '%']
+            [profileId, '%' + searchQuery.toLowerCase() + '%']
           );
           const byNameRows = (byName.rows || []).map(mapRow);
           const seen = new Set(customFoods.map(f => f.customFoodId));
@@ -180,9 +181,10 @@ router.get('/search', async (req, res) => {
   }
 });
 
-// Check for potential duplicate custom foods (by name or barcode). Must be before /custom/:id.
+// Check for potential duplicate custom foods (scoped to profile)
 router.get('/custom/check', async (req, res) => {
   try {
+    const profileId = req.profileId;
     const { name, barcode } = req.query || {};
     const n = (name || '').trim();
     const bc = (barcode || '').trim().replace(/^0+/, '') || null;
@@ -190,8 +192,8 @@ router.get('/custom/check', async (req, res) => {
       return res.status(400).json({ error: 'Name or barcode is required' });
     }
     const conditions = [];
-    const params = [];
-    let i = 1;
+    const params = [profileId];
+    let i = 2;
     if (n.length >= 2) {
       conditions.push(`(LOWER(name) LIKE $${i} OR (brand IS NOT NULL AND LOWER(brand) LIKE $${i}))`);
       params.push('%' + n.toLowerCase() + '%');
@@ -207,7 +209,7 @@ router.get('/custom/check', async (req, res) => {
     }
     const result = await pool.query(
       `SELECT id, name, brand, barcode, serving_size, serving_unit, calories, protein, fat, carbs
-       FROM foods WHERE source = 'custom' AND (${conditions.join(' OR ')})
+       FROM foods WHERE source = 'custom' AND profile_id = $1 AND (${conditions.join(' OR ')})
        ORDER BY name LIMIT 20`,
       params
     );
@@ -232,9 +234,10 @@ router.get('/custom/check', async (req, res) => {
   }
 });
 
-// Create custom food
+// Create custom food (scoped to profile)
 router.post('/custom', async (req, res) => {
   try {
+    const profileId = req.profileId;
     const { name, brand, barcode, serving_size, serving_unit, calories, protein, fat, carbs } = req.body || {};
     const n = (name || '').trim();
     const su = ((serving_unit || 'g').trim().toLowerCase());
@@ -256,10 +259,11 @@ router.post('/custom', async (req, res) => {
     const bc = (barcode || '').trim() || null;
 
     const result = await pool.query(
-      `INSERT INTO foods (source, name, brand, barcode, serving_size, serving_unit, calories, protein, fat, carbs)
-       VALUES ('custom', $1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO foods (source, profile_id, name, brand, barcode, serving_size, serving_unit, calories, protein, fat, carbs)
+       VALUES ('custom', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING id, name, brand, barcode, serving_size, serving_unit, calories, protein, fat, carbs, created_at`,
       [
+        profileId,
         n,
         (brand || '').trim() || null,
         bc,
@@ -295,17 +299,18 @@ router.post('/custom', async (req, res) => {
   }
 });
 
-// Get custom food by id
+// Get custom food by id (scoped to profile)
 router.get('/custom/:id', async (req, res) => {
   try {
+    const profileId = req.profileId;
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) {
       return res.status(400).json({ error: 'Invalid custom food ID' });
     }
     const result = await pool.query(
       `SELECT id, name, brand, barcode, serving_size, serving_unit, calories, protein, fat, carbs
-       FROM foods WHERE source = 'custom' AND id = $1`,
-      [id]
+       FROM foods WHERE source = 'custom' AND profile_id = $1 AND id = $2`,
+      [profileId, id]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Custom food not found' });

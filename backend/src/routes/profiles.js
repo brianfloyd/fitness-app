@@ -35,7 +35,12 @@ router.post('/', async (req, res) => {
       'INSERT INTO profiles (username, password) VALUES ($1, $2) RETURNING id, username, created_at',
       [trimmed, String(password)]
     );
-    res.status(201).json(result.rows[0]);
+    const profile = result.rows[0];
+    await pool.query(
+      'INSERT INTO app_settings (profile_id, total_days, start_date) VALUES ($1, 84, CURRENT_DATE)',
+      [profile.id]
+    );
+    res.status(201).json(profile);
   } catch (error) {
     if (error.code === '23505') {
       return res.status(409).json({ error: 'Username already exists' });
