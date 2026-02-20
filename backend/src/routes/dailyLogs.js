@@ -96,6 +96,9 @@ router.get('/:date', async (req, res) => {
     );
     
     if (result.rows.length === 0) {
+      if (process.env.NODE_ENV === 'production') {
+        console.log('[logs] GET', { profileId, date, found: false });
+      }
       const dayNumber = await calculateDayNumber(profileId, date);
       const settingsResult = await pool.query(
         'SELECT total_days FROM app_settings WHERE profile_id = $1 ORDER BY id DESC LIMIT 1',
@@ -122,6 +125,9 @@ router.get('/:date', async (req, res) => {
     }
     
     const log = result.rows[0];
+    if (process.env.NODE_ENV === 'production') {
+      console.log('[logs] GET', { profileId, date, found: true, weight: log.weight, fat_percent: log.fat_percent });
+    }
     const settingsResult = await pool.query(
       'SELECT total_days FROM app_settings WHERE profile_id = $1 ORDER BY id DESC LIMIT 1',
       [profileId]
@@ -187,6 +193,7 @@ router.get('/today', async (req, res) => {
 router.post('/', upload.single('photo'), async (req, res) => {
   try {
     const profileId = req.profileId;
+    const body = req.body || {};
     const {
       date,
       weight,
@@ -200,8 +207,18 @@ router.post('/', upload.single('photo'), async (req, res) => {
       sleep_score,
       strava,
       steps,
-    } = req.body;
+    } = body;
     const logDate = date || new Date().toISOString().split('T')[0];
+    if (process.env.NODE_ENV === 'production') {
+      console.log('[logs] POST', {
+        profileId,
+        logDate,
+        bodyKeys: typeof req.body === 'object' && req.body ? Object.keys(req.body) : 'none',
+        weight: body.weight,
+        fat_percent: body.fat_percent,
+        hasFile: !!req.file,
+      });
+    }
     const dayNumber = await calculateDayNumber(profileId, logDate);
     const existing = await pool.query(
       'SELECT id FROM daily_logs WHERE profile_id = $1 AND date = $2',
@@ -258,7 +275,10 @@ router.post('/', upload.single('photo'), async (req, res) => {
       [profileId]
     );
     const totalDays = settingsResult.rows[0]?.total_days || 84;
-    
+    if (process.env.NODE_ENV === 'production') {
+      const row = result.rows[0];
+      console.log('[logs] POST saved', { profileId, date: row?.date, weight: row?.weight, fat_percent: row?.fat_percent });
+    }
     res.json({
       ...result.rows[0],
       total_days: totalDays,

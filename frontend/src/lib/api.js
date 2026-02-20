@@ -3,6 +3,9 @@ import { currentUser } from './userStore.js';
 
 const API_BASE = '/api';
 
+// Enable in prod: localStorage.setItem('fitness_debug','1'); refresh. See docs/DEBUGGING-PROD-PERSIST.md
+const DEBUG = typeof localStorage !== 'undefined' && localStorage.getItem('fitness_debug') === '1';
+
 function apiHeaders() {
   const user = get(currentUser);
   const h = {};
@@ -12,13 +15,17 @@ function apiHeaders() {
 
 /** Fetch with profile header; on 401 clear session so user is sent to login. */
 async function fetchWithProfile(url, options = {}) {
+  const headers = { ...apiHeaders(), ...options.headers };
+  if (DEBUG) {
+    console.log('[fitness] fetch', options.method || 'GET', url, { hasProfileId: !!headers['X-Profile-Id'], profileId: headers['X-Profile-Id'] });
+  }
   const response = await fetch(url, {
     ...options,
-    headers: {
-      ...apiHeaders(),
-      ...options.headers,
-    },
+    headers,
   });
+  if (DEBUG) {
+    console.log('[fitness] response', response.status, url);
+  }
   if (response.status === 401) {
     currentUser.logout();
     const errBody = await response.json().catch(() => ({}));
@@ -53,7 +60,11 @@ export async function getTodayLog() {
 export async function getLogByDate(date) {
   const response = await fetchWithProfile(`${API_BASE}/logs/${date}`);
   ensureOk(response);
-  return response.json();
+  const data = await response.json();
+  if (DEBUG) {
+    console.log('[fitness] getLogByDate', date, { weight: data.weight, fat_percent: data.fat_percent });
+  }
+  return data;
 }
 
 export async function saveLog(logData, photoFile) {
@@ -68,12 +79,19 @@ export async function saveLog(logData, photoFile) {
     formData.append('photo', photoFile);
   }
 
+  if (DEBUG) {
+    console.log('[fitness] saveLog', { date: logData.date, weight: logData.weight, fat_percent: logData.fat_percent, hasPhoto: !!photoFile });
+  }
   const response = await fetchWithProfile(`${API_BASE}/logs`, {
     method: 'POST',
     body: formData,
   });
   ensureOk(response);
-  return response.json();
+  const data = await response.json();
+  if (DEBUG) {
+    console.log('[fitness] saveLog done', { date: data.date, weight: data.weight, fat_percent: data.fat_percent });
+  }
+  return data;
 }
 
 export async function getSettings() {
