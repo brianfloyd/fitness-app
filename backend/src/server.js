@@ -16,7 +16,8 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware - CORS: production whitelists Railway domain(s), dev allows all
+// Middleware - CORS: production whitelists Railway domain(s), dev allows all.
+// When no origin (same-origin) or allowedOrigins empty (unconfigured prod), allow so requests don't get blocked.
 const allowedOrigins = process.env.NODE_ENV === 'production'
   ? [
       ...(process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim()) : []),
@@ -24,11 +25,17 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
     ].filter(Boolean)
   : [];
 app.use(
-  cors(
-    allowedOrigins.length
-      ? { origin: allowedOrigins, credentials: true }
-      : { origin: true }
-  )
+  cors({
+    origin: (origin, callback) => {
+      // Same-origin requests have no Origin header; always allow.
+      if (!origin) return callback(null, true);
+      // Dev or prod with no env set: allow all.
+      if (allowedOrigins.length === 0) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      callback(null, false);
+    },
+    credentials: true,
+  })
 );
 // Mount multipart (file upload) routes BEFORE body parsers so multer receives the raw stream
 app.use('/api/logs', requireProfileId, dailyLogsRoutes);

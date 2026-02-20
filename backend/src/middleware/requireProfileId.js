@@ -9,6 +9,9 @@ export function requireProfileId(req, res, next) {
   }
   const id = raw != null ? parseInt(String(raw).trim(), 10) : NaN;
   if (!Number.isInteger(id) || id < 1) {
+    if (process.env.NODE_ENV === 'production') {
+      console.warn('[requireProfileId] 401: missing or invalid X-Profile-Id', { method: req.method, path: req.path, hasHeader: raw != null });
+    }
     return res.status(401).json({
       error: 'Profile required',
       details: 'Missing or invalid X-Profile-Id header or profileId query. Log in and retry.',

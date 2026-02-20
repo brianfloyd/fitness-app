@@ -163,12 +163,10 @@ psql -f database/schema.sql
 
 ### **6.2 CORS Configuration**
 
-**Backend:**
-- CORS enabled for frontend domain
-- Production domain whitelisted
-- Development: Allow all origins
-
-**File:** `backend/src/server.js`
+**Backend:** `backend/src/server.js`
+- Same-origin requests (no `Origin` header) are always allowed.
+- If `CORS_ORIGIN` or `RAILWAY_PUBLIC_DOMAIN` is set in production, only those origins are allowed; otherwise all origins are allowed (so the app works even when env is unset).
+- Set `RAILWAY_PUBLIC_DOMAIN` (e.g. `yourapp.railway.app`) or `CORS_ORIGIN` (comma-separated URLs) in Railway so production restricts CORS when using a custom domain.
 
 ---
 

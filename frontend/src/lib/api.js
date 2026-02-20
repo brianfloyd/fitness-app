@@ -10,21 +10,35 @@ function apiHeaders() {
   return h;
 }
 
+/** Fetch with profile header; on 401 clear session so user is sent to login. */
+async function fetchWithProfile(url, options = {}) {
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      ...apiHeaders(),
+      ...options.headers,
+    },
+  });
+  if (response.status === 401) {
+    currentUser.logout();
+    const errBody = await response.json().catch(() => ({}));
+    throw new Error(errBody.details || errBody.error || 'Session expired. Please log in again.');
+  }
+  return response;
+}
+
+/** Throw if !response.ok (after fetchWithProfile); preserves 401 logout. */
+function ensureOk(response) {
+  if (!response.ok) {
+    const errorText = response.statusText || 'Unknown error';
+    throw new Error(`API request failed: ${response.status} ${errorText}`);
+  }
+}
+
 async function apiCall(url, options = {}) {
   try {
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        ...apiHeaders(),
-        ...options.headers,
-      },
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'Unknown error');
-      throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
-    }
-    
+    const response = await fetchWithProfile(url, options);
+    ensureOk(response);
     return response.json();
   } catch (error) {
     console.error('API call failed:', url, error);
@@ -37,8 +51,8 @@ export async function getTodayLog() {
 }
 
 export async function getLogByDate(date) {
-  const response = await fetch(`${API_BASE}/logs/${date}`, { headers: apiHeaders() });
-  if (!response.ok) throw new Error('Failed to fetch log');
+  const response = await fetchWithProfile(`${API_BASE}/logs/${date}`);
+  ensureOk(response);
   return response.json();
 }
 
@@ -54,48 +68,41 @@ export async function saveLog(logData, photoFile) {
     formData.append('photo', photoFile);
   }
 
-  const response = await fetch(`${API_BASE}/logs`, {
+  const response = await fetchWithProfile(`${API_BASE}/logs`, {
     method: 'POST',
-    headers: apiHeaders(),
     body: formData,
   });
-
-  if (!response.ok) throw new Error('Failed to save log');
+  ensureOk(response);
   return response.json();
 }
 
 export async function getSettings() {
-  const response = await fetch(`${API_BASE}/settings`, { headers: apiHeaders() });
-  if (!response.ok) throw new Error('Failed to fetch settings');
+  const response = await fetchWithProfile(`${API_BASE}/settings`);
+  ensureOk(response);
   return response.json();
 }
 
 export async function updateSettings(settings, goalPhotoFile) {
   const formData = new FormData();
-  
-  if (goalPhotoFile) {
-    formData.append('goal_photo', goalPhotoFile);
-  }
-  
   Object.keys(settings).forEach(key => {
     if (settings[key] !== null && settings[key] !== undefined && settings[key] !== '') {
       formData.append(key, settings[key]);
     }
   });
-  
-  const response = await fetch(`${API_BASE}/settings`, {
+  if (goalPhotoFile) {
+    formData.append('goal_photo', goalPhotoFile);
+  }
+  const response = await fetchWithProfile(`${API_BASE}/settings`, {
     method: 'PUT',
-    headers: apiHeaders(),
     body: formData,
   });
-  
-  if (!response.ok) throw new Error('Failed to update settings');
+  ensureOk(response);
   return response.json();
 }
 
 export async function getCurrentDay() {
-  const response = await fetch(`${API_BASE}/settings/current-day`, { headers: apiHeaders() });
-  if (!response.ok) throw new Error('Failed to get current day');
+  const response = await fetchWithProfile(`${API_BASE}/settings/current-day`);
+  ensureOk(response);
   return response.json();
 }
 
@@ -112,15 +119,15 @@ export function getGoalPhotoUrl() {
 }
 
 export async function getRecentLogs(limit = 20) {
-  const response = await fetch(`${API_BASE}/logs?limit=${limit}&page=1`, { headers: apiHeaders() });
-  if (!response.ok) throw new Error('Failed to fetch recent logs');
+  const response = await fetchWithProfile(`${API_BASE}/logs?limit=${limit}&page=1`);
+  ensureOk(response);
   const data = await response.json();
   return data.logs || [];
 }
 
 export async function getLogsByDateRange(startDate, endDate) {
-  const response = await fetch(`${API_BASE}/logs/range?startDate=${startDate}&endDate=${endDate}`, { headers: apiHeaders() });
-  if (!response.ok) throw new Error('Failed to fetch logs by date range');
+  const response = await fetchWithProfile(`${API_BASE}/logs/range?startDate=${startDate}&endDate=${endDate}`);
+  ensureOk(response);
   return response.json();
 }
 
@@ -131,46 +138,43 @@ export async function searchFoods(query, options = {}) {
   if (options.dataType) params.append('dataType', options.dataType);
   if (options.pageSize) params.append('pageSize', options.pageSize);
   
-  const response = await fetch(`${API_BASE}/foods/search?${params}`, { headers: apiHeaders() });
-  if (!response.ok) throw new Error('Failed to search foods');
+  const response = await fetchWithProfile(`${API_BASE}/foods/search?${params}`);
+  ensureOk(response);
   return response.json();
 }
 
 export async function getFoodDetails(fdcId, format = 'full') {
-  const response = await fetch(`${API_BASE}/foods/${fdcId}?format=${format}`, { headers: apiHeaders() });
-  if (!response.ok) throw new Error('Failed to fetch food details');
+  const response = await fetchWithProfile(`${API_BASE}/foods/${fdcId}?format=${format}`);
+  ensureOk(response);
   return response.json();
 }
 
 export async function searchFoodsByBarcode(gtin) {
-  const response = await fetch(`${API_BASE}/foods/search?gtin=${gtin}`, { headers: apiHeaders() });
-  if (!response.ok) throw new Error('Failed to search foods by barcode');
+  const response = await fetchWithProfile(`${API_BASE}/foods/search?gtin=${gtin}`);
+  ensureOk(response);
   return response.json();
 }
 
 export async function getBatchFoodDetails(fdcIds) {
-  const response = await fetch(`${API_BASE}/foods/batch`, {
+  const response = await fetchWithProfile(`${API_BASE}/foods/batch`, {
     method: 'POST',
-    headers: {
-      ...apiHeaders(),
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ fdcIds }),
   });
-  if (!response.ok) throw new Error('Failed to fetch batch food details');
+  ensureOk(response);
   return response.json();
 }
 
 export async function getPreviouslyUsedFoods() {
-  const response = await fetch(`${API_BASE}/logs/foods/used`, { headers: apiHeaders() });
-  if (!response.ok) throw new Error('Failed to fetch previously used foods');
+  const response = await fetchWithProfile(`${API_BASE}/logs/foods/used`);
+  ensureOk(response);
   return response.json();
 }
 
 export async function createCustomFood(data) {
-  const response = await fetch(`${API_BASE}/foods/custom`, {
+  const response = await fetchWithProfile(`${API_BASE}/foods/custom`, {
     method: 'POST',
-    headers: { ...apiHeaders(), 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
   if (!response.ok) {
@@ -181,8 +185,8 @@ export async function createCustomFood(data) {
 }
 
 export async function getCustomFood(id) {
-  const response = await fetch(`${API_BASE}/foods/custom/${id}`, { headers: apiHeaders() });
-  if (!response.ok) throw new Error('Failed to fetch custom food');
+  const response = await fetchWithProfile(`${API_BASE}/foods/custom/${id}`);
+  ensureOk(response);
   return response.json();
 }
 
@@ -224,7 +228,7 @@ export async function checkCustomFoodDuplicates({ name, barcode }) {
   if (name && (name || '').trim()) params.set('name', (name || '').trim());
   if (barcode && (barcode || '').trim()) params.set('barcode', (barcode || '').trim());
   if (!params.toString()) return { matches: [] };
-  const response = await fetch(`${API_BASE}/foods/custom/check?${params}`, { headers: apiHeaders() });
-  if (!response.ok) throw new Error('Failed to check duplicates');
+  const response = await fetchWithProfile(`${API_BASE}/foods/custom/check?${params}`);
+  ensureOk(response);
   return response.json();
 }
