@@ -1661,4 +1661,12 @@
       padding: var(--spacing-lg);
     }
   }
+
+  /* Mobile: larger interactive fonts (dev evaluation) */
+  @media (max-width: 767px) {
+    .form-section h3,
+    .section-header {
+      font-size: 1.125rem;
+    }
+  }
 </style>

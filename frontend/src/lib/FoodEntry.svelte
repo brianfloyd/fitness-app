@@ -305,4 +305,29 @@
     .compact-summary { font-size: 0.8rem; }
     .remove-btn { width: 26px; height: 26px; }
   }
+
+  /* Mobile: larger interactive fonts (dev evaluation) */
+  @media (max-width: 767px) {
+    .compact-name {
+      font-size: 1rem;
+    }
+    .compact-summary {
+      font-size: 0.9375rem;
+    }
+    .expand-icon {
+      font-size: 0.75rem;
+    }
+    .food-brand {
+      font-size: 0.9375rem;
+    }
+    .amount-input,
+    .unit-select {
+      font-size: 1.125rem;
+      padding: var(--spacing-md);
+      min-height: 2.75rem;
+    }
+    .food-macros {
+      font-size: 0.9375rem;
+    }
+  }
 </style>

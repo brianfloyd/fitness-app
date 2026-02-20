@@ -208,7 +208,7 @@ img, video, iframe, embed, object {
   height: auto;
 }
 
-/* Mobile-specific overflow prevention */
+/* Mobile-specific overflow prevention + larger interactive font sizes (readable without glasses) */
 @media (max-width: 768px) {
   html, body {
     overflow-x: hidden;
@@ -235,5 +235,22 @@ img, video, iframe, embed, object {
   .workout-section {
     max-width: 100%;
     overflow-x: hidden;
+  }
+
+  /* Larger fonts for interactive elements on mobile (dev evaluation) */
+  button {
+    font-size: 1.125rem;
+    padding: var(--spacing-md) var(--spacing-lg);
+  }
+  input, textarea, select {
+    font-size: 1.125rem;
+    padding: var(--spacing-md) var(--spacing-lg);
+    min-height: 2.75rem;
+  }
+  input::placeholder, textarea::placeholder {
+    font-size: 1.125rem;
+  }
+  label {
+    font-size: 1rem;
   }
 }

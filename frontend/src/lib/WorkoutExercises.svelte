@@ -1003,6 +1003,64 @@
     background-color: var(--primary-color);
     color: white;
   }
+
+  /* Mobile: larger interactive fonts (dev evaluation) */
+  @media (max-width: 767px) {
+    .picker-header h3 {
+      font-size: 1.375rem;
+    }
+    .picker-search input {
+      font-size: 1.125rem;
+      padding: var(--spacing-md);
+      min-height: 2.75rem;
+    }
+    .exercise-option {
+      font-size: 1.125rem;
+      padding: var(--spacing-md) var(--spacing-lg);
+      min-height: 2.75rem;
+    }
+    .recent-label {
+      font-size: 0.9375rem;
+    }
+    .recent-badge {
+      font-size: 0.75rem;
+    }
+    .add-custom-btn {
+      font-size: 1.125rem;
+      padding: var(--spacing-md) var(--spacing-lg);
+      min-height: 2.75rem;
+    }
+    .exercise-name {
+      font-size: 1.125rem;
+    }
+    .muscle-badge {
+      font-size: 0.875rem;
+    }
+    .sets-header {
+      font-size: 0.875rem;
+    }
+    .set-row input,
+    .set-number {
+      font-size: 1rem;
+    }
+    .add-set-btn,
+    .delete-exercise-btn,
+    .complete-exercise-btn {
+      font-size: 1rem;
+    }
+    .pill-badge {
+      font-size: 0.6875rem;
+    }
+    .pill-name {
+      font-size: 1.125rem;
+    }
+    .muscle-name {
+      font-size: 0.9375rem;
+    }
+    .pill-stats {
+      font-size: 0.8125rem;
+    }
+  }
   
   .exercises-list {
     display: grid;
