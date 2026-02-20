@@ -74,6 +74,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // In development, never intercept the main document - let the browser load it directly.
+  // This avoids 503 on GET / when the SW's fetch fails (e.g. cert, timing).
+  if (isDevelopment && request.mode === 'navigate') {
+    return;
+  }
+
   // Critical assets (JS, CSS, HTML) - always network first, never serve stale cache
   const isCriticalAsset = url.pathname.endsWith('.js') || 
                           url.pathname.endsWith('.css') || 
@@ -82,12 +88,27 @@ self.addEventListener('fetch', (event) => {
                           url.pathname.startsWith('/src/');
 
   if (isCriticalAsset) {
-    // In development, don't cache critical assets at all - always fetch fresh
+    // In development: network first, then cache fallback so mobile dev is resilient to cert/network glitches
     if (isDevelopment) {
-      event.respondWith(fetch(request));
+      event.respondWith(
+        fetch(request)
+          .then((response) => {
+            if (response && response.status === 200 && response.type === 'basic') {
+              const clone = response.clone();
+              caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, clone).catch(() => {}));
+            }
+            return response;
+          })
+          .catch((err) => {
+            console.warn('[Service Worker] Fetch failed (e.g. cert or network on mobile):', url.pathname, err);
+            return caches.match(request).then((cached) =>
+              cached || new Response('Service Unavailable', { status: 503, statusText: 'Network Error' })
+            );
+          })
+      );
       return;
     }
-    
+
     // For critical assets in production, always fetch from network, only use cache if network completely fails
     event.respondWith(
       fetch(request)
@@ -105,14 +126,12 @@ self.addEventListener('fetch', (event) => {
         })
         .catch((err) => {
           console.warn('[Service Worker] Network failed for critical asset, trying cache:', url.pathname);
-          // Only use cache if network completely fails
           return caches.match(request).then((cachedResponse) => {
             if (cachedResponse) {
               console.warn('[Service Worker] Serving cached version (network unavailable)');
               return cachedResponse;
             }
-            // Re-throw the original error so the browser can handle it
-            throw err;
+            return new Response('Offline', { status: 503, statusText: 'Network Error' });
           });
         })
     );
@@ -124,16 +143,20 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          // Clone the response for caching
           const responseToCache = response.clone();
           caches.open(RUNTIME_CACHE).then((cache) => {
             cache.put(request, responseToCache);
           });
           return response;
         })
-        .catch(() => {
-          // Network failed, try cache
-          return caches.match(request);
+        .catch((err) => {
+          console.warn('[Service Worker] API fetch failed:', url.pathname, err);
+          return caches.match(request).then((cached) =>
+            cached || new Response(JSON.stringify({ error: 'Network unavailable' }), {
+              status: 503,
+              headers: { 'Content-Type': 'application/json' },
+            })
+          );
         })
     );
     return;
@@ -143,7 +166,6 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(request)
       .then((response) => {
-        // Only cache successful responses
         if (response && response.status === 200 && response.type === 'basic') {
           const responseToCache = response.clone();
           caches.open(RUNTIME_CACHE).then((cache) => {
@@ -157,11 +179,8 @@ self.addEventListener('fetch', (event) => {
       .catch((err) => {
         console.warn('[Service Worker] Network request failed, trying cache:', err);
         return caches.match(request).then((cachedResponse) => {
-          if (cachedResponse) {
-            return cachedResponse;
-          }
-          // Re-throw to let browser handle the error
-          throw err;
+          if (cachedResponse) return cachedResponse;
+          return new Response('Not found', { status: 404 });
         });
       })
   );

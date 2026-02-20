@@ -1,6 +1,18 @@
 Write-Host "Starting Fitness App Development Servers..." -ForegroundColor Green
 Write-Host ""
 
+# Show local IP(s) for mobile access (same WiFi required)
+$localIPs = Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notmatch 'Loopback' -and $_.IPAddress -match '^192\.168\.|^10\.' } | Select-Object -ExpandProperty IPAddress
+if ($localIPs) {
+  Write-Host "Mobile access (use one of these on your phone, same WiFi):" -ForegroundColor Yellow
+  foreach ($ip in $localIPs) {
+    Write-Host "  https://${ip}:5173" -ForegroundColor Cyan
+  }
+  Write-Host "  (Accept certificate warning: Advanced -> Proceed)" -ForegroundColor Gray
+  Write-Host "  If 'site can''t be reached': allow port 5173 in Windows Firewall (see docs/MOBILE-DEV.md)" -ForegroundColor Gray
+  Write-Host ""
+}
+
 Write-Host "Starting Backend Server (port 3001)..." -ForegroundColor Yellow
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PSScriptRoot\backend'; npm run dev"
 

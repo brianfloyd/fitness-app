@@ -5,7 +5,8 @@
   export let onNext = () => {};
   
   $: progress = (dayNumber / totalDays) * 100;
-  $: percentage = progress.toFixed(1); // Format to 1 decimal place
+  $: percentage = progress.toFixed(1);
+  $: daysRemaining = totalDays - dayNumber;
   $: showPrevious = dayNumber > 1;
   $: showNext = dayNumber < totalDays;
   
@@ -49,6 +50,7 @@
       <div class="progress-fill" style="width: {progress}%"></div>
     </div>
     <span class="progress-percentage">{percentage}%</span>
+    <span class="days-remaining">{daysRemaining} left</span>
   </div>
 </div>
 
@@ -157,6 +159,14 @@
     min-width: 50px;
     text-align: right;
     flex-shrink: 0;
+  }
+
+  .days-remaining {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-muted, var(--text-secondary));
+    flex-shrink: 0;
+    white-space: nowrap;
   }
   
   @media (min-width: 768px) {
