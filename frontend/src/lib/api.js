@@ -44,23 +44,22 @@ export async function getLogByDate(date) {
 
 export async function saveLog(logData, photoFile) {
   const formData = new FormData();
-  
-  if (photoFile) {
-    formData.append('photo', photoFile);
-  }
-  
+  // Append all log fields first so multer receives multipart in a consistent order (file last can fix prod parsers)
   Object.keys(logData).forEach(key => {
     if (logData[key] !== null && logData[key] !== undefined && logData[key] !== '') {
       formData.append(key, logData[key]);
     }
   });
-  
+  if (photoFile) {
+    formData.append('photo', photoFile);
+  }
+
   const response = await fetch(`${API_BASE}/logs`, {
     method: 'POST',
     headers: apiHeaders(),
     body: formData,
   });
-  
+
   if (!response.ok) throw new Error('Failed to save log');
   return response.json();
 }

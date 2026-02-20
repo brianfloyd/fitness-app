@@ -30,6 +30,10 @@ app.use(
       : { origin: true }
   )
 );
+// Mount multipart (file upload) routes BEFORE body parsers so multer receives the raw stream
+app.use('/api/logs', requireProfileId, dailyLogsRoutes);
+app.use('/api/settings', requireProfileId, settingsRoutes);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -46,9 +50,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Routes (logs, settings, foods require X-Profile-Id for multi-tenant scoping)
-app.use('/api/logs', requireProfileId, dailyLogsRoutes);
-app.use('/api/settings', requireProfileId, settingsRoutes);
+// Routes (foods, strava require X-Profile-Id for multi-tenant scoping)
 app.use('/api/strava', requireProfileId, stravaRoutes);
 app.use('/api/foods', requireProfileId, foodsRoutes);
 app.use('/api/profiles', profilesRoutes);
