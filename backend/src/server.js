@@ -15,6 +15,12 @@ import authRoutes from './routes/auth.js';
 
 dotenv.config();
 
+// Debug: log Google-related env keys at startup (values never logged)
+const googleKeys = Object.keys(process.env).filter((k) => k.toUpperCase().includes('GOOGLE'));
+if (process.env.NODE_ENV === 'production') {
+  console.log('[startup] GOOGLE_* env keys present:', googleKeys.length ? googleKeys : 'none');
+}
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
