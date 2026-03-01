@@ -11,6 +11,7 @@ import stravaRoutes from './routes/strava.js';
 import fitbitRoutes from './routes/fitbit.js';
 import foodsRoutes from './routes/foods.js';
 import profilesRoutes from './routes/profiles.js';
+import authRoutes from './routes/auth.js';
 
 dotenv.config();
 
@@ -54,7 +55,7 @@ app.use((req, res, next) => {
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   // For development with self-signed certs, we allow unsafe-inline for CSP
   // In production, you should use proper CSP
-  res.setHeader('Content-Security-Policy', "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; img-src 'self' data: blob: https:;");
+  res.setHeader('Content-Security-Policy', "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com; frame-src https://accounts.google.com; img-src 'self' data: blob: https:;");
   next();
 });
 
@@ -63,6 +64,7 @@ app.use('/api/strava', requireProfileId, stravaRoutes);
 app.use('/api/fitbit', fitbitRoutes);
 app.use('/api/foods', requireProfileId, foodsRoutes);
 app.use('/api/profiles', profilesRoutes);
+app.use('/api/auth', authRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

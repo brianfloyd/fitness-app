@@ -1,11 +1,14 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { currentUser } from './userStore.js';
-  import { getProfiles, createProfile, verifyProfile } from './api.js';
+  import { getProfiles, createProfile, verifyProfile, getAuthConfig, verifyGoogleAuth } from './api.js';
 
   let profiles = [];
   let loading = true;
   let error = '';
+  let googleClientId = null;
+  let googleButtonReady = false;
+  let googleButtonRendered = false;
 
   // Add user state
   let showAddForm = false;
@@ -18,7 +21,64 @@
 
   onMount(async () => {
     await loadProfiles();
+    const config = await getAuthConfig();
+    if (config?.googleClientId) {
+      googleClientId = config.googleClientId;
+      initGoogleSignIn();
+    }
   });
+
+  async function initGoogleSignIn() {
+    if (!googleClientId || typeof window === 'undefined') return;
+    const waitForGsi = () => {
+      if (window.google?.accounts?.id) {
+        window.google.accounts.id.initialize({
+          client_id: googleClientId,
+          callback: handleGoogleCredential,
+          auto_select: false,
+        });
+        googleButtonReady = true;
+      } else {
+        setTimeout(waitForGsi, 100);
+      }
+    };
+    waitForGsi();
+  }
+
+  $: if (googleButtonReady && !googleButtonRendered && typeof window !== 'undefined') {
+    renderGoogleButton();
+  }
+
+  async function renderGoogleButton() {
+    await tick();
+    const el = document.getElementById('google-signin-btn');
+    if (!el || googleButtonRendered) return;
+    if (window.google?.accounts?.id) {
+      try {
+        window.google.accounts.id.renderButton(el, {
+          type: 'standard',
+          theme: 'filled_black',
+          size: 'large',
+          text: 'continue_with',
+          width: 280,
+        });
+        googleButtonRendered = true;
+      } catch (e) {
+        console.error('Google button render failed:', e);
+      }
+    }
+  }
+
+  async function handleGoogleCredential(response) {
+    if (!response?.credential) return;
+    error = '';
+    try {
+      const user = await verifyGoogleAuth(response.credential);
+      currentUser.setUser(user);
+    } catch (e) {
+      error = e.message || 'Google sign-in failed';
+    }
+  }
 
   async function loadProfiles() {
     loading = true;
@@ -109,6 +169,12 @@
   {#if loading}
     <p class="loading">Loading profiles…</p>
   {:else}
+    {#if googleButtonReady}
+      <div class="google-signin-wrapper">
+        <div id="google-signin-btn" class="google-btn-container"></div>
+        <p class="divider-text">or</p>
+      </div>
+    {/if}
     <div class="cards-grid">
       {#each profiles as profile}
         <button
@@ -232,6 +298,27 @@
   .loading {
     color: var(--text-muted);
     padding: var(--spacing-xl);
+  }
+
+  .google-signin-wrapper {
+    margin-bottom: var(--spacing-xl);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-md);
+  }
+
+  .google-btn-container {
+    display: flex;
+    justify-content: center;
+    min-height: 44px;
+    width: 100%;
+  }
+
+  .divider-text {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    margin: 0;
   }
 
   .cards-grid {

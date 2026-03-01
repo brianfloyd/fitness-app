@@ -1,8 +1,13 @@
 <script>
   import GeneralSettings from './GeneralSettings.svelte';
   import AddDeviceSettings from './AddDeviceSettings.svelte';
+  import { currentUser } from './userStore.js';
 
   let currentSection = null;
+
+  function logout() {
+    currentUser.logout();
+  }
 
   const sections = [
     { id: 'general', label: 'General', icon: 'settings' },
@@ -34,6 +39,13 @@
           </button>
         {/each}
       </nav>
+
+      <section class="account-section" aria-labelledby="account-heading">
+        <h3 id="account-heading" class="legal-heading">Account</h3>
+        <button type="button" class="logout-btn-settings" on:click={logout}>
+          Log out
+        </button>
+      </section>
 
       <section class="legal-section" aria-labelledby="legal-heading">
         <h3 id="legal-heading" class="legal-heading">Legal & Privacy</h3>
@@ -166,8 +178,31 @@
     color: var(--primary-color);
   }
 
-  .legal-section {
+  .account-section {
     margin-top: var(--spacing-xl);
+    padding-top: var(--spacing-lg);
+    border-top: 1px solid var(--border);
+  }
+
+  .logout-btn-settings {
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--border-radius-sm);
+    color: var(--text-secondary);
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+  }
+
+  .logout-btn-settings:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+  }
+
+  .legal-section {
+    margin-top: var(--spacing-lg);
     padding-top: var(--spacing-lg);
     border-top: 1px solid var(--border);
   }

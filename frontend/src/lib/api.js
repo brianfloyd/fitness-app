@@ -233,6 +233,25 @@ export async function createProfile({ username, password }) {
   return response.json();
 }
 
+export async function getAuthConfig() {
+  const response = await fetch(`${API_BASE}/auth/config`);
+  if (!response.ok) return { googleClientId: null };
+  return response.json();
+}
+
+export async function verifyGoogleAuth(credential) {
+  const response = await fetch(`${API_BASE}/auth/google`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ credential }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Google sign-in failed');
+  }
+  return response.json();
+}
+
 export async function verifyProfile({ username, password }) {
   const response = await fetch(`${API_BASE}/profiles/verify`, {
     method: 'POST',
