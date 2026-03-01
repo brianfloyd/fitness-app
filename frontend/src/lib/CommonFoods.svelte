@@ -217,22 +217,23 @@
     });
   }
   
-  // Scroll carousel left
+  // Scroll carousel by one card (snap-friendly) - horizontal rectangle cards
+  function getCardScrollDistance() {
+    const gap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--spacing-sm') || '8', 10);
+    const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+    return (isMobile ? 260 : 320) + gap;
+  }
+  
   function scrollLeft() {
     if (!carouselContainer) return;
-    const cardWidth = 200 + parseInt(getComputedStyle(document.documentElement).getPropertyValue('--spacing-sm') || '8', 10);
-    carouselContainer.scrollBy({ left: -cardWidth * 2, behavior: 'smooth' });
-    // Update visibility after scroll animation
+    carouselContainer.scrollBy({ left: -getCardScrollDistance(), behavior: 'smooth' });
     setTimeout(updateArrowVisibility, 100);
     setTimeout(updateArrowVisibility, 350);
   }
   
-  // Scroll carousel right
   function scrollRight() {
     if (!carouselContainer) return;
-    const cardWidth = 200 + parseInt(getComputedStyle(document.documentElement).getPropertyValue('--spacing-sm') || '8', 10);
-    carouselContainer.scrollBy({ left: cardWidth * 2, behavior: 'smooth' });
-    // Update visibility after scroll animation
+    carouselContainer.scrollBy({ left: getCardScrollDistance(), behavior: 'smooth' });
     setTimeout(updateArrowVisibility, 100);
     setTimeout(updateArrowVisibility, 350);
   }
@@ -253,19 +254,6 @@
     </div>
     
     <div class="carousel-wrapper">
-      <button
-        type="button"
-        class="carousel-arrow carousel-arrow-left"
-        class:disabled={!showLeftArrow}
-        on:click={scrollLeft}
-        aria-label="Scroll left"
-        disabled={!showLeftArrow}
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="15 18 9 12 15 6"></polyline>
-        </svg>
-      </button>
-      
       <div 
         class="common-foods-grid"
         bind:this={carouselContainer}
@@ -284,58 +272,40 @@
             {#if food.brand}
               <div class="common-food-brand">{food.brand}</div>
             {/if}
-            
-            <div class="common-food-serving">
-              <div class="serving-inputs">
-                <input
-                  type="number"
-                  class="serving-amount"
-                  value={displayAmount}
-                  on:input={(e) => {
-                    const val = parseFloat(e.target.value);
-                    if (!isNaN(val) && val >= 0) {
-                      handleAmountChange(food.fdcId, val);
-                    }
-                  }}
-                  on:click|stopPropagation
-                  step="0.1"
-                  min="0"
-                  placeholder="Amount"
-                />
-                <select
-                  class="serving-unit"
-                  value={finalUnit}
-                  on:change={(e) => handleUnitChange(food.fdcId, e.target.value)}
-                  on:click|stopPropagation
-                >
-                  {#each availableUnits as u}
-                    <option value={u}>{u}</option>
-                  {/each}
-                </select>
-              </div>
-            </div>
-            
-            <div class="common-food-macros">
-              <div class="macro-row">
-                <span class="macro-label">P:</span>
-                <span class="macro-value protein">{macros.protein.toFixed(1)}g</span>
-              </div>
-              <div class="macro-row">
-                <span class="macro-label">F:</span>
-                <span class="macro-value fat">{macros.fat.toFixed(1)}g</span>
-              </div>
-              <div class="macro-row">
-                <span class="macro-label">C:</span>
-                <span class="macro-value carbs">{macros.carbs.toFixed(1)}g</span>
-              </div>
-              <div class="macro-row">
-                <span class="macro-label">Cal:</span>
-                <span class="macro-value calories">{macros.calories}</span>
-              </div>
-            </div>
           </div>
-          
-          <div class="common-food-actions">
+          <div class="common-food-macros-row">
+            <span class="macro-value protein">P {macros.protein.toFixed(1)}g</span>
+            <span class="macro-value fat">F {macros.fat.toFixed(1)}g</span>
+            <span class="macro-value carbs">C {macros.carbs.toFixed(1)}g</span>
+            <span class="macro-value calories">{macros.calories} cal</span>
+          </div>
+          <div class="common-food-interaction-row">
+            <input
+              type="number"
+              class="serving-amount"
+              value={displayAmount}
+              on:input={(e) => {
+                const val = parseFloat(e.target.value);
+                if (!isNaN(val) && val >= 0) {
+                  handleAmountChange(food.fdcId, val);
+                }
+              }}
+              on:click|stopPropagation
+              step="0.1"
+              min="0"
+              placeholder="Amt"
+            />
+            <select
+              class="serving-unit"
+              value={finalUnit}
+              on:change={(e) => handleUnitChange(food.fdcId, e.target.value)}
+              on:click|stopPropagation
+            >
+              {#each availableUnits as u}
+                <option value={u}>{u}</option>
+              {/each}
+            </select>
+            <div class="common-food-actions">
             <button
               type="button"
               class="add-btn"
@@ -351,7 +321,7 @@
               on:click|stopPropagation={(e) => handleFavoriteToggle(food.fdcId, e)}
               title={food.isFavorite ? 'Unfavorite' : 'Favorite'}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill={food.isFavorite ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill={food.isFavorite ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2">
                 <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
               </svg>
             </button>
@@ -361,28 +331,41 @@
               on:click|stopPropagation={(e) => handleRemove(food.fdcId, e)}
               title="Remove from common foods"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="3 6 5 6 21 6"></polyline>
                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
               </svg>
             </button>
+            </div>
           </div>
         </div>
       {/each}
       </div>
       
-      <button
-        type="button"
-        class="carousel-arrow carousel-arrow-right"
-        class:disabled={!showRightArrow}
-        on:click={scrollRight}
-        aria-label="Scroll right"
-        disabled={!showRightArrow}
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="9 18 15 12 9 6"></polyline>
-        </svg>
-      </button>
+      <div class="carousel-arrows-below">
+        <button
+          type="button"
+          class="carousel-arrow carousel-arrow-left"
+          class:disabled={!showLeftArrow}
+          on:click={scrollLeft}
+          aria-label="Previous"
+          title="Previous"
+          disabled={!showLeftArrow}
+        >
+          ‹
+        </button>
+        <button
+          type="button"
+          class="carousel-arrow carousel-arrow-right"
+          class:disabled={!showRightArrow}
+          on:click={scrollRight}
+          aria-label="Next"
+          title="Next"
+          disabled={!showRightArrow}
+        >
+          ›
+        </button>
+      </div>
     </div>
   </div>
 {/if}
@@ -421,9 +404,18 @@
   
   .carousel-wrapper {
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    align-items: stretch;
     width: 100%;
     gap: var(--spacing-sm);
+  }
+  
+  .carousel-arrows-below {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding-top: var(--spacing-xs);
   }
   
   .common-foods-grid {
@@ -432,11 +424,11 @@
     overflow-x: auto;
     overflow-y: hidden;
     scroll-behavior: smooth;
+    scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
     padding: var(--spacing-xs) 0;
     flex: 1;
-    min-width: 0; /* Allow shrinking */
-    /* Show scrollbar on mobile for better UX */
+    min-width: 0;
     scrollbar-width: thin;
     scrollbar-color: var(--border) transparent;
   }
@@ -459,59 +451,39 @@
   }
   
   .carousel-arrow {
-    flex: 0 0 auto;
-    width: 40px;
-    height: 40px;
-    min-width: 40px;
+    width: 24px;
+    height: 24px;
+    padding: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: var(--surface-elevated);
-    border: 2px solid var(--border);
-    border-radius: 50%;
-    color: var(--text-primary);
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--text-muted);
+    font-size: 1.25rem;
+    font-weight: 400;
+    line-height: 1;
     cursor: pointer;
-    transition: all 0.2s;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    transition: color 0.2s, background 0.2s;
   }
   
   .carousel-arrow:hover:not(:disabled) {
-    background-color: var(--primary-color);
-    border-color: var(--primary-color);
-    color: white;
-    transform: scale(1.1);
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    color: var(--primary-color);
+    background: rgba(59, 130, 246, 0.1);
   }
   
   .carousel-arrow:active:not(:disabled) {
-    transform: scale(0.95);
+    color: var(--primary-color);
   }
   
   .carousel-arrow:disabled {
-    opacity: 0.4;
+    opacity: 0.3;
     cursor: not-allowed;
-    background-color: var(--surface);
-    border-color: var(--border);
-  }
-  
-  .carousel-arrow:disabled svg {
-    opacity: 0.6;
-    color: var(--text-secondary);
+    color: var(--text-muted);
   }
   
   @media (max-width: 768px) {
-    .carousel-arrow {
-      width: 36px;
-      height: 36px;
-      min-width: 36px;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
-    }
-    
-    .carousel-arrow svg {
-      width: 18px;
-      height: 18px;
-    }
-    
     .common-foods-grid {
       padding: var(--spacing-xs) 0;
     }
@@ -534,22 +506,24 @@
   .common-food-card {
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
-    padding: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
     background-color: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--border-radius);
     transition: all 0.2s;
     position: relative;
     flex: 0 0 auto;
-    min-width: 200px;
-    max-width: 200px;
+    min-width: 260px;
+    max-width: 320px;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
   }
   
   @media (max-width: 768px) {
     .common-food-card {
-      min-width: 150px;
-      max-width: 150px;
+      min-width: 240px;
+      max-width: 280px;
+      padding: var(--spacing-xs) var(--spacing-sm);
     }
   }
   
@@ -562,6 +536,7 @@
   
   .common-food-info {
     flex: 1;
+    min-width: 0;
     margin-bottom: var(--spacing-xs);
   }
   
@@ -569,29 +544,40 @@
     font-weight: 600;
     color: var(--text-primary);
     font-size: 0.875rem;
-    margin-bottom: var(--spacing-xs);
+    margin-bottom: 2px;
     word-break: break-word;
   }
   
   .common-food-brand {
     font-size: 0.75rem;
     color: var(--text-secondary);
-    margin-bottom: var(--spacing-xs);
   }
   
-  .common-food-serving {
-    margin: var(--spacing-xs) 0;
-  }
-  
-  .serving-inputs {
-    display: flex;
+  .common-food-macros-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
     gap: var(--spacing-xs);
+    font-size: 0.7rem;
+    margin-bottom: var(--spacing-sm);
+    padding-top: var(--spacing-xs);
+    border-top: 1px solid var(--border);
+  }
+  
+  .common-food-macros-row .macro-value {
+    font-weight: 600;
+    text-align: center;
+  }
+  
+  .common-food-interaction-row {
+    display: flex;
     align-items: center;
+    gap: var(--spacing-xs);
+    padding-top: var(--spacing-xs);
+    border-top: 1px solid var(--border);
   }
   
   .serving-amount {
-    flex: 2;
-    min-width: 80px;
+    width: 56px;
     padding: var(--spacing-xs);
     border: 1px solid var(--border);
     border-radius: var(--border-radius-sm);
@@ -607,7 +593,7 @@
   
   .serving-unit {
     flex: 0 0 auto;
-    min-width: 50px;
+    min-width: 40px;
     width: auto;
     padding: var(--spacing-xs);
     border: 1px solid var(--border);
@@ -631,28 +617,6 @@
     color: var(--text-primary);
   }
   
-  .common-food-macros {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: var(--spacing-xs);
-    margin-top: var(--spacing-xs);
-    padding-top: var(--spacing-xs);
-    border-top: 1px solid var(--border);
-    font-size: 0.7rem;
-  }
-  
-  .macro-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: var(--spacing-xs);
-  }
-  
-  .macro-label {
-    color: var(--text-secondary);
-    font-weight: 500;
-  }
-  
   .macro-value {
     font-weight: 600;
   }
@@ -673,23 +637,21 @@
     color: var(--text-primary);
   }
   
+  .common-food-interaction-row .common-food-actions,
   .common-food-actions {
     display: flex;
-    gap: var(--spacing-xs);
-    justify-content: flex-end;
+    gap: 2px;
+    margin-left: auto;
     align-items: center;
-    margin-top: var(--spacing-xs);
-    padding-top: var(--spacing-xs);
-    border-top: 1px solid var(--border);
   }
   
   .add-btn {
-    padding: var(--spacing-xs) var(--spacing-sm);
+    padding: 4px var(--spacing-sm);
     background-color: var(--primary-color);
     color: white;
     border: none;
     border-radius: var(--border-radius-sm);
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     font-weight: 600;
     cursor: pointer;
     transition: background-color 0.2s;
@@ -702,7 +664,7 @@
   
   .favorite-btn,
   .remove-btn {
-    padding: var(--spacing-xs);
+    padding: 4px;
     background: none;
     border: none;
     color: var(--text-secondary);

@@ -1,8 +1,9 @@
 <script>
   import { createEventDispatcher, onMount, onDestroy } from 'svelte';
   import { searchFoods, searchFoodsByBarcode, getPreviouslyUsedFoods } from './api.js';
-  import { BrowserMultiFormatReader } from '@zxing/library';
+  import { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } from '@zxing/library';
   import CustomFoodForm from './CustomFoodForm.svelte';
+  import AddFromBarcodeModal from './AddFromBarcodeModal.svelte';
 
   const dispatch = createEventDispatcher();
   
@@ -14,7 +15,8 @@
   let searchTimeout = null;
   let previouslyUsedFoods = []; // Array of foods that have been logged before
   let showCustomFoodForm = false;
-  
+  let showAddFromBarcodeModal = false;
+
   // Camera scanning state
   let showCameraModal = false;
   let videoStream = null;
@@ -181,7 +183,8 @@
       searchResults = [...usedApiFoods, ...newApiFoods];
       
       if (searchResults.length === 0) {
-        error = 'No food found with this barcode. Try searching by name instead.';
+        showAddFromBarcodeModal = true;
+        error = null;
       }
     } catch (err) {
       console.error('Error searching by barcode:', err);
@@ -218,13 +221,26 @@
         console.warn('BarcodeDetector initialization failed, using ZXing fallback:', e);
         hasBarcodeDetector = false;
         useZXing = true;
-        zxingReader = new BrowserMultiFormatReader();
+        zxingReader = createZXingReader();
       }
-    } else {
-      // Use ZXing as fallback for iOS and other browsers
-      useZXing = true;
-      zxingReader = new BrowserMultiFormatReader();
-    }
+  } else {
+    // Use ZXing as fallback for iOS and other browsers
+    useZXing = true;
+    zxingReader = createZXingReader();
+  }
+
+  function createZXingReader() {
+    const hints = new Map();
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+      BarcodeFormat.UPC_A,
+      BarcodeFormat.UPC_E,
+      BarcodeFormat.EAN_13,
+      BarcodeFormat.EAN_8,
+      BarcodeFormat.CODE_128,
+      BarcodeFormat.CODE_39,
+    ]);
+    return new BrowserMultiFormatReader(hints, 200);
+  }
     
     // Load previously used foods
     await loadPreviouslyUsedFoods();
@@ -336,177 +352,50 @@
       }
       
       if (useZXing && zxingReader) {
-        // Use ZXing for iOS and other browsers
+        // Use ZXing's built-in continuous decode from video constraints
         try {
-          // Set up video element for iOS before ZXing takes over
           videoElement.setAttribute('playsinline', 'true');
           videoElement.setAttribute('webkit-playsinline', 'true');
           videoElement.muted = true;
           videoElement.playsInline = true;
           
-          // On iOS, device enumeration doesn't work, so manually get the stream
-          // Request camera access directly using the getUserMedia function we determined above
-          if (!getUserMediaFn) {
-            throw new Error('getUserMedia is not available');
-          }
-          
-          // Check permission state (non-intrusive check)
-          const permissionState = await checkCameraPermission();
-          
-          // Only request permission if we haven't already this session
-          // and if permission wasn't previously granted
-          // iOS Safari will remember permission if granted, so we can request directly
-          // The browser will handle showing/not showing the prompt based on previous grants
-          
-          // Request camera access (browser will remember if permission was previously granted)
-          // This must be called directly from user interaction to work properly on iOS
-          const stream = await getUserMediaFn({
-            video: {
-              facingMode: 'environment', // Use back camera on mobile
-              width: { ideal: 1280 },
-              height: { ideal: 720 }
-            }
-          });
-          
-          // If we got here, permission was granted
-          cameraPermissionGranted = true;
-          permissionRequestedThisSession = true;
-          localStorage.setItem(CAMERA_PERMISSION_KEY, 'granted');
-          localStorage.setItem(CAMERA_PERMISSION_TIMESTAMP_KEY, Date.now().toString());
-          
-          // Monitor stream health
-          stream.getVideoTracks().forEach(track => {
-            track.onended = () => {
-              console.debug('Camera track ended');
-              if (scanning && showCameraModal) {
-                restartCameraIfNeeded();
+          // ZXing handles getUserMedia, video setup, and continuous decoding internally
+          await zxingReader.decodeFromConstraints(
+            {
+              video: {
+                facingMode: 'environment',
+                width: { ideal: 1280, min: 640 },
+                height: { ideal: 720, min: 480 }
               }
-            };
-            
-            track.onmute = () => {
-              console.debug('Camera track muted');
-            };
-            
-            track.onunmute = () => {
-              console.debug('Camera track unmuted');
-            };
-          });
-          
-          videoStream = stream;
-          videoElement.srcObject = stream;
-          videoPlaying = false;
-          
-          // Wait for video to be ready and play
-          await new Promise((resolve, reject) => {
-            const timeoutId = setTimeout(() => {
-              console.debug('Video ready timeout, proceeding anyway');
-              resolve();
-            }, 3000);
-            
-            const playHandler = () => {
-              clearTimeout(timeoutId);
-              videoElement.removeEventListener('playing', playHandler);
-              videoPlaying = true;
-              console.debug('Video confirmed playing');
-              resolve();
-            };
-            
-            videoElement.addEventListener('playing', playHandler);
-            
-            // Start playback
-            videoElement.play().then(() => {
-              console.debug('Video play() resolved');
-            }).catch(playErr => {
-              console.debug('Video play error:', playErr);
-              // Still try to continue - the video might start on user interaction
-            });
-          });
-          
-          // Keep video playing with periodic checks
-          const keepAliveInterval = setInterval(() => {
-            if (!scanning || !showCameraModal || !videoElement) {
-              clearInterval(keepAliveInterval);
-              return;
-            }
-            
-            // Check if video is still playing
-            if (videoElement.paused && videoElement.srcObject) {
-              console.debug('Keep-alive: video paused, resuming...');
-              videoElement.play().catch(e => console.debug('Keep-alive play error:', e));
-            }
-          }, 1000);
-          
-          // Now use ZXing to continuously decode from canvas snapshots
-          // This avoids blocking the video element rendering
-          const decodeInterval = setInterval(async () => {
-            if (!scanning || !videoElement || !canvasElement) {
-              return;
-            }
-            
-            // Only decode if video has a stream, is playing, and has dimensions
-            if (!videoElement.srcObject || videoElement.ended || videoElement.paused) {
-              return;
-            }
-            
-            // Check video has actual dimensions
-            if (videoElement.videoWidth === 0 || videoElement.videoHeight === 0) {
-              return;
-            }
-            
-            try {
-              // Capture frame to canvas for decoding (doesn't block video)
-              const ctx = canvasElement.getContext('2d');
-              canvasElement.width = videoElement.videoWidth;
-              canvasElement.height = videoElement.videoHeight;
-              ctx.drawImage(videoElement, 0, 0);
-              
-              // Decode from canvas
-              const result = await zxingReader.decodeFromCanvas(canvasElement);
+            },
+            videoElement,
+            (result, err) => {
               if (result) {
                 const barcodeValue = result.getText();
                 if (barcodeValue && barcodeValue.length >= 8) {
-                  clearInterval(decodeInterval);
-                  // Stop scanning and search
                   stopCamera();
                   barcodeQuery = barcodeValue;
                   handleBarcodeSearch();
                 }
               }
-            } catch (err) {
-              // NotFoundException is normal when no barcode is detected
-              if (err.name !== 'NotFoundException' && err.name !== 'NoQRCodeFoundException' && err.name !== 'ChecksumException') {
-                console.debug('ZXing decode error:', err);
-              }
+              // NotFoundException is normal when no barcode in frame - ignore
             }
-          }, 300); // Scan every 300ms
+          );
           
-          // Store intervals for cleanup
-          scanInterval = decodeInterval;
+          // decodeFromConstraints resolved = camera started successfully
+          cameraPermissionGranted = true;
+          permissionRequestedThisSession = true;
+          localStorage.setItem(CAMERA_PERMISSION_KEY, 'granted');
+          localStorage.setItem(CAMERA_PERMISSION_TIMESTAMP_KEY, Date.now().toString());
+          videoPlaying = true;
           
-          // Monitor stream health (less aggressive since we have keep-alive)
-          streamMonitorInterval = setInterval(() => {
-            if (!scanning || !showCameraModal) {
-              clearInterval(streamMonitorInterval);
-              streamMonitorInterval = null;
-              return;
-            }
-            
-            // Check if stream tracks are still alive
-            if (videoStream) {
-              const activeTracks = videoStream.getVideoTracks().filter(track => track.readyState === 'live');
-              if (activeTracks.length === 0) {
-                console.debug('No active camera tracks detected, restarting...');
-                restartCameraIfNeeded();
-              }
-            } else if (videoElement && !videoElement.srcObject) {
-              console.debug('Video element lost stream, restarting...');
-              restartCameraIfNeeded();
-            }
-          }, 3000); // Check every 3 seconds
+          // Grab the stream ZXing set up so we can clean it up later
+          if (videoElement.srcObject instanceof MediaStream) {
+            videoStream = videoElement.srcObject;
+          }
         } catch (err) {
           console.error('ZXing initialization error:', err);
           const errorMessage = err.message || err.toString() || 'Unknown error';
-          // Check for specific error types
           if (err.name === 'NotAllowedError' || errorMessage.includes('permission')) {
             cameraPermissionGranted = false;
             permissionRequestedThisSession = true;
@@ -514,8 +403,6 @@
             error = 'Camera permission denied. Please allow camera access to scan barcodes.';
           } else if (err.name === 'NotFoundError' || errorMessage.includes('camera') || errorMessage.includes('device')) {
             error = 'No camera found. Please enter the barcode manually.';
-          } else if (errorMessage.includes('mediaDevices') || errorMessage.includes('getUserMedia') || errorMessage.includes('undefined')) {
-            error = 'Camera access is not supported in this browser. Please use Safari or a recent version of Chrome, or enter the barcode manually.';
           } else {
             error = `Failed to start barcode scanner: ${errorMessage}. Please enter the barcode manually.`;
           }
@@ -530,8 +417,8 @@
         const stream = await getUserMediaFn({
           video: {
             facingMode: 'environment', // Use back camera on mobile
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
+            width: { ideal: 1920, min: 640 },
+            height: { ideal: 1080, min: 480 }
           }
         });
         
@@ -572,7 +459,7 @@
               // Ignore detection errors, continue scanning
             }
           }
-        }, 500); // Scan every 500ms
+        }, 250); // Scan every 250ms for better barcode capture
         
         // Monitor stream health
         streamMonitorInterval = setInterval(() => {
@@ -629,12 +516,13 @@
       streamMonitorInterval = null;
     }
     
-    // Stop ZXing scanning
+    // Stop ZXing continuous decode and release camera
     if (zxingReader) {
       try {
+        zxingReader.stopContinuousDecode();
         zxingReader.reset();
       } catch (e) {
-        console.debug('ZXing reset error:', e);
+        console.debug('ZXing cleanup error:', e);
       }
     }
     
@@ -672,115 +560,32 @@
   let restartAttempts = 0;
   const maxRestartAttempts = 3;
   
-  // Function to restart camera if it stops unexpectedly
   async function restartCameraIfNeeded() {
     if (!showCameraModal || !scanning || !videoElement) {
       return;
     }
     
-    // Check if stream is actually dead or video stopped
     const hasActiveStream = videoStream && videoStream.getVideoTracks().some(track => track.readyState === 'live');
-    const videoIsActive = videoElement.srcObject && !videoElement.ended;
     
-    if (!hasActiveStream || !videoIsActive) {
+    if (!hasActiveStream) {
       restartAttempts++;
-      
       if (restartAttempts > maxRestartAttempts) {
-        console.debug('Max restart attempts reached');
         error = 'Camera keeps stopping. Please close and reopen the scanner.';
         return;
       }
       
-      console.debug(`Camera stopped unexpectedly, attempting restart ${restartAttempts}/${maxRestartAttempts}...`);
-      
+      console.debug(`Camera stopped, restarting ${restartAttempts}/${maxRestartAttempts}...`);
+      stopCamera();
+      showCameraModal = true;
+      scanning = true;
+      await new Promise(resolve => setTimeout(resolve, 500));
+      startCameraScan();
+    } else if (videoElement.paused) {
       try {
-        // Clean up old stream first
-        if (videoStream) {
-          videoStream.getTracks().forEach(track => {
-            track.stop();
-            track.onended = null;
-          });
-          videoStream = null;
-        }
-        if (videoElement.srcObject) {
-          const oldStream = videoElement.srcObject;
-          if (oldStream instanceof MediaStream) {
-            oldStream.getTracks().forEach(track => {
-              track.stop();
-              track.onended = null;
-            });
-          }
-          videoElement.srcObject = null;
-        }
-        
-        // Small delay before requesting new stream
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        if (!scanning || !showCameraModal || !videoElement) {
-          return;
-        }
-        
-        // Get new stream
-        const stream = await getUserMediaFn({
-          video: {
-            facingMode: 'environment',
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          }
-        });
-        
-        if (!scanning || !showCameraModal || !videoElement) {
-          // User closed modal while we were getting stream
-          stream.getTracks().forEach(track => track.stop());
-          return;
-        }
-        
-        // Set up new stream
-        videoStream = stream;
-        videoElement.srcObject = stream;
-        videoPlaying = false;
-        
-        // Monitor new stream
-        stream.getVideoTracks().forEach(track => {
-          track.onended = () => {
-            console.debug('Restarted camera track ended');
-            if (scanning && showCameraModal) {
-              restartCameraIfNeeded();
-            }
-          };
-        });
-        
-        // Play video
-        try {
-          await videoElement.play();
-          videoPlaying = true;
-          restartAttempts = 0; // Reset on successful restart
-          console.debug('Camera restarted successfully');
-        } catch (playErr) {
-          console.debug('Restart play error:', playErr);
-        }
-      } catch (err) {
-        console.error('Failed to restart camera:', err);
-        if (err.name === 'NotAllowedError') {
-          cameraPermissionGranted = false;
-          permissionRequestedThisSession = true;
-          localStorage.setItem(CAMERA_PERMISSION_KEY, 'denied');
-          error = 'Camera permission denied. Please allow camera access.';
-          stopCamera();
-        } else if (restartAttempts >= maxRestartAttempts) {
-          error = 'Camera stopped unexpectedly. Please close and reopen the scanner.';
-        }
-      }
-    } else {
-      // Stream is alive but video might be paused
-      if (videoElement.paused) {
-        console.debug('Video paused but stream alive, resuming...');
-        try {
-          await videoElement.play();
-          videoPlaying = true;
-        } catch (e) {
-          console.debug('Resume error:', e);
-        }
+        await videoElement.play();
+        videoPlaying = true;
+      } catch (e) {
+        console.debug('Resume error:', e);
       }
     }
   }
@@ -819,6 +624,20 @@
   function handleCustomFoodCancel() {
     showCustomFoodForm = false;
   }
+
+  function handleAddFromBarcodeCreated(event) {
+    const created = event.detail;
+    dispatch('foodSelected', created);
+    searchQuery = '';
+    searchResults = [];
+    barcodeQuery = '';
+    showAddFromBarcodeModal = false;
+  }
+
+  function handleAddFromBarcodeCancel() {
+    showAddFromBarcodeModal = false;
+    error = 'No food found with this barcode. Try searching by name instead.';
+  }
   
   function getDataTypeBadge(dataType) {
     const badges = {
@@ -836,6 +655,34 @@
     if (food.customFoodId != null) return previouslyUsedFoods.some(used => used.customFoodId === food.customFoodId);
     if (food.fdcId != null) return previouslyUsedFoods.some(used => used.fdcId === food.fdcId);
     return false;
+  }
+
+  function extractMacros(food) {
+    if (food.source === 'custom') {
+      return {
+        cal: food.calories != null ? Math.round(food.calories) : null,
+        p: food.protein != null ? Math.round(food.protein) : null,
+        f: food.fat != null ? Math.round(food.fat) : null,
+        c: food.carbs != null ? Math.round(food.carbs) : null,
+        serving: food.servingSize ? `${food.servingSize}${food.servingSizeUnit || 'g'}` : null,
+      };
+    }
+    let cal = null, p = null, f = null, c = null;
+    if (food.foodNutrients) {
+      for (const n of food.foodNutrients) {
+        const id = n.nutrientId ?? n.nutrient?.id;
+        const v = n.value ?? n.amount;
+        if (v == null) continue;
+        if (id === 1008) cal = Math.round(v);
+        else if (id === 1003) p = Math.round(v);
+        else if (id === 1004) f = Math.round(v);
+        else if (id === 1005) c = Math.round(v);
+      }
+    }
+    const ss = food.servingSize;
+    const su = food.servingSizeUnit || 'g';
+    const serving = ss ? `${ss}${su}` : null;
+    return { cal, p, f, c, serving };
   }
 </script>
 
@@ -858,22 +705,13 @@
       <button type="button" class="add-custom-inline-btn" on:click={openAddCustomFood} disabled={isSearching}>
         Add custom
       </button>
-    </div>
-    <div class="barcode-group">
-      <input
-        type="text"
-        class="barcode-input"
-        placeholder="Barcode/GTIN"
-        bind:value={barcodeQuery}
-        disabled={isSearching}
-        on:keydown={(e) => e.key === 'Enter' && handleBarcodeSearch()}
-      />
       <button
         type="button"
         class="barcode-btn"
         on:click={handleCameraButtonClick}
         disabled={isSearching || scanning}
-        title={barcodeQuery && barcodeQuery.length >= 8 ? "Search by barcode" : "Scan barcode with camera"}
+        title="Scan barcode with camera"
+        aria-label="Scan barcode"
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="3" y="3" width="18" height="18" rx="2"></rect>
@@ -895,31 +733,35 @@
       {#each searchResults as food}
         {@const badge = getDataTypeBadge(food.source === 'custom' ? 'Custom' : food.dataType)}
         {@const isUsed = isPreviouslyUsed(food)}
+        {@const m = extractMacros(food)}
         <div class="food-result" class:previously-used={isUsed} role="button" tabindex="0" on:click={() => handleSelectFood(food)} on:keydown={(e) => e.key === 'Enter' && handleSelectFood(food)}>
           <div class="food-result-info">
-            <div class="food-result-name">
-              {food.description || food.brandOwner || 'Unknown Food'}
-              {#if isUsed}
-                <span class="used-badge" title="Previously logged">✓</span>
-              {/if}
+            <div class="food-result-header">
+              <span class="food-result-name">
+                {food.description || food.brandOwner || 'Unknown Food'}
+                {#if isUsed}<span class="used-badge" title="Previously logged">✓</span>{/if}
+              </span>
+              <span class="food-result-badge" style="background-color: {badge.color}20; color: {badge.color};">{badge.label}</span>
             </div>
             {#if food.brandOwner && food.description !== food.brandOwner}
               <div class="food-result-brand">{food.brandOwner}</div>
             {/if}
-            {#if food.gtinUpc}
-              <div class="food-result-gtin">UPC: {food.gtinUpc}</div>
-            {/if}
-          </div>
-          <div class="food-result-badge" style="background-color: {badge.color}20; color: {badge.color};">
-            {badge.label}
+            <div class="food-result-macros">
+              {#if m.cal != null}<span class="macro-cal">{m.cal} cal</span>{/if}
+              {#if m.serving}<span class="macro-sep">·</span><span class="macro-serving">{m.serving}</span>{/if}
+              {#if m.p != null}<span class="macro-sep">·</span><span class="macro-p">P {m.p}g</span>{/if}
+              {#if m.f != null}<span class="macro-sep">·</span><span class="macro-f">F {m.f}g</span>{/if}
+              {#if m.c != null}<span class="macro-sep">·</span><span class="macro-c">C {m.c}g</span>{/if}
+              {#if m.cal == null && m.p == null && m.f == null && m.c == null}
+                <span class="macro-na">—</span>
+              {/if}
+            </div>
           </div>
           <button
             type="button"
             class="add-food-btn"
             on:click|stopPropagation={() => handleSelectFood(food)}
-          >
-            Add
-          </button>
+          >+</button>
         </div>
       {/each}
     </div>
@@ -950,6 +792,13 @@
     </div>
   </div>
 {/if}
+
+<AddFromBarcodeModal
+  barcode={barcodeQuery}
+  visible={showAddFromBarcodeModal}
+  on:created={handleAddFromBarcodeCreated}
+  on:cancel={handleAddFromBarcodeCancel}
+/>
 
 {#if showCameraModal}
   <div 
@@ -986,67 +835,17 @@
           playsinline
           webkit-playsinline="true"
           muted
-          on:loadedmetadata={() => {
-            console.debug('Video metadata loaded:', videoElement.videoWidth, 'x', videoElement.videoHeight);
-          }}
-          on:canplay={() => {
-            console.debug('Video can play');
-            // Ensure video keeps playing
-            if (scanning && showCameraModal && videoElement && videoElement.paused) {
-              videoElement.play().catch(e => console.debug('Canplay autoplay error:', e));
-            }
-          }}
-          on:play={() => {
-            console.debug('Video started playing');
-            videoPlaying = true;
-          }}
-          on:playing={() => {
-            console.debug('Video is now playing');
-            videoPlaying = true;
-          }}
-          on:pause={() => {
-            console.debug('Video paused');
-            videoPlaying = false;
-            // Video paused - try to resume immediately
-            if (scanning && showCameraModal && videoElement) {
-              setTimeout(() => {
-                if (scanning && showCameraModal && videoElement && videoElement.paused && videoElement.srcObject) {
-                  console.debug('Attempting to resume paused video...');
-                  videoElement.play().catch(e => {
-                    console.debug('Resume play error:', e);
-                    // If play fails, try restarting the stream
-                    restartCameraIfNeeded();
-                  });
-                }
-              }, 100);
-            }
-          }}
-          on:stalled={() => {
-            console.debug('Video stalled');
-            // Video stalled - check if we need to restart
-            if (scanning && showCameraModal) {
-              setTimeout(() => {
-                if (scanning && showCameraModal && videoElement && !videoPlaying) {
-                  restartCameraIfNeeded();
-                }
-              }, 2000);
-            }
-          }}
-          on:ended={() => {
-            console.debug('Video ended');
-            videoPlaying = false;
-            if (scanning && showCameraModal) {
-              restartCameraIfNeeded();
-            }
-          }}
+          on:playing={() => { videoPlaying = true; }}
+          on:pause={() => { videoPlaying = false; }}
         ></video>
         {#if scanning}
           <div class="scanning-overlay">
             <div class="scan-line"></div>
-            <p class="scan-instructions">Point camera at barcode</p>
+            <p class="scan-instructions">Hold barcode steady within frame</p>
           </div>
         {/if}
       </div>
+      <p class="camera-permission-tip">Use the same URL each visit so camera permission persists (especially on mobile)</p>
       <div class="camera-modal-footer">
         <button type="button" class="cancel-camera-btn" on:click={stopCamera}>Cancel</button>
       </div>
@@ -1140,28 +939,6 @@
   
   @keyframes spin {
     to { transform: rotate(360deg); }
-  }
-  
-  .barcode-group {
-    display: flex;
-    gap: var(--spacing-xs);
-    align-items: center;
-  }
-  
-  .barcode-input {
-    flex: 1;
-    padding: var(--spacing-sm);
-    border: 1px solid var(--border);
-    border-radius: var(--border-radius);
-    background-color: var(--input-background);
-    color: var(--text-primary);
-    font-size: 0.875rem;
-  }
-  
-  .barcode-input:focus {
-    border-color: var(--primary-color);
-    outline: none;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
   }
   
   .barcode-btn {
@@ -1303,7 +1080,16 @@
     padding: var(--spacing-xs) var(--spacing-sm);
     border-radius: var(--border-radius-sm);
   }
-  
+
+  .camera-permission-tip {
+    font-size: 0.75rem;
+    color: var(--text-muted, #6b7280);
+    text-align: center;
+    padding: 0 var(--spacing-md);
+    margin: 0;
+    line-height: 1.3;
+  }
+
   .camera-modal-footer {
     padding: var(--spacing-md);
     border-top: 1px solid var(--border);
@@ -1349,78 +1135,118 @@
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
-    padding: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) var(--spacing-md);
     background-color: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--border-radius);
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.15s;
   }
-  
+
   .food-result:hover {
     background-color: var(--surface-elevated);
     border-color: var(--primary-color);
   }
-  
+
   .food-result.previously-used {
     border-left: 3px solid #10b981;
     background-color: rgba(16, 185, 129, 0.05);
   }
-  
+
   .used-badge {
-    display: inline-block;
-    margin-left: var(--spacing-xs);
     color: #10b981;
     font-weight: 600;
-    font-size: 0.875rem;
+    font-size: 0.8rem;
+    margin-left: 2px;
   }
-  
+
   .food-result-info {
     flex: 1;
     min-width: 0;
   }
-  
+
+  .food-result-header {
+    display: flex;
+    align-items: baseline;
+    gap: var(--spacing-sm);
+    margin-bottom: 2px;
+  }
+
   .food-result-name {
     font-weight: 500;
+    font-size: 0.9rem;
     color: var(--text-primary);
-    margin-bottom: var(--spacing-xs);
     word-break: break-word;
+    line-height: 1.3;
   }
-  
+
   .food-result-brand {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: var(--text-secondary);
-    margin-bottom: var(--spacing-xs);
+    margin-bottom: 2px;
   }
-  
-  .food-result-gtin {
+
+  .food-result-macros {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px;
     font-size: 0.75rem;
     color: var(--text-muted);
+    line-height: 1.4;
   }
-  
+
+  .macro-cal {
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+
+  .macro-sep {
+    color: var(--border);
+    margin: 0 1px;
+  }
+
+  .macro-p { color: #3b82f6; }
+  .macro-f { color: #f59e0b; }
+  .macro-c { color: #10b981; }
+
+  .macro-serving {
+    color: var(--text-muted);
+  }
+
+  .macro-na {
+    color: var(--text-muted);
+  }
+
   .food-result-badge {
-    padding: var(--spacing-xs) var(--spacing-sm);
+    padding: 2px 6px;
     border-radius: var(--border-radius-sm);
-    font-size: 0.75rem;
+    font-size: 0.65rem;
     font-weight: 600;
     white-space: nowrap;
+    flex-shrink: 0;
   }
-  
+
   .add-food-btn {
-    padding: var(--spacing-xs) var(--spacing-md);
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background-color: var(--primary-color);
     color: white;
     border: none;
-    border-radius: var(--border-radius-sm);
-    font-size: 0.875rem;
+    border-radius: 50%;
+    font-size: 1.1rem;
     font-weight: 600;
     cursor: pointer;
-    white-space: nowrap;
-    transition: background-color 0.2s;
+    flex-shrink: 0;
+    transition: background-color 0.15s;
+    line-height: 1;
   }
-  
+
   .add-food-btn:hover {
-    background-color: var(--primary-dark);
+    background-color: var(--primary-hover);
   }
   
   .no-results {

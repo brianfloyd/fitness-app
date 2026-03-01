@@ -5,11 +5,13 @@
   const dispatch = createEventDispatcher();
 
   export let initialName = '';
+  export let initialBarcode = '';
+  export let universal = false;
   export let visible = true;
 
   let name = typeof initialName === 'string' ? initialName : '';
   let brand = '';
-  let barcode = '';
+  let barcode = typeof initialBarcode === 'string' ? initialBarcode : '';
   let servingSize = '100';
   let servingUnit = 'g';
   let calories = '';
@@ -82,7 +84,7 @@
   async function doCreate() {
     const p = getPayload();
     try {
-      const created = await createCustomFood(p);
+      const created = await createCustomFood(p, { universal });
       showDuplicatePrompt = false;
       duplicateMatches = [];
       dispatch('created', created);

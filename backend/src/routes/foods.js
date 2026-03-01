@@ -118,8 +118,9 @@ router.get('/search', async (req, res) => {
           const bc = searchQuery.replace(/^0+/, '');
           const byBarcode = await pool.query(
             `SELECT id, name, brand, barcode, serving_size, serving_unit, calories, protein, fat, carbs
-             FROM foods WHERE source = 'custom' AND profile_id = $1 AND (barcode = $2 OR barcode = '0' || $2)
-             ORDER BY name LIMIT 20`,
+             FROM foods WHERE source = 'custom' AND (profile_id = $1 OR profile_id IS NULL)
+             AND (barcode = $2 OR barcode = '0' || $2)
+             ORDER BY profile_id NULLS LAST, name LIMIT 20`,
             [profileId, bc]
           );
           customFoods = (byBarcode.rows || []).map(mapRow);
@@ -127,8 +128,9 @@ router.get('/search', async (req, res) => {
         if (!gtin) {
           const byName = await pool.query(
             `SELECT id, name, brand, barcode, serving_size, serving_unit, calories, protein, fat, carbs
-             FROM foods WHERE source = 'custom' AND profile_id = $1 AND (LOWER(name) LIKE $2 OR (brand IS NOT NULL AND LOWER(brand) LIKE $2))
-             ORDER BY name LIMIT 20`,
+             FROM foods WHERE source = 'custom' AND (profile_id = $1 OR profile_id IS NULL)
+             AND (LOWER(name) LIKE $2 OR (brand IS NOT NULL AND LOWER(brand) LIKE $2))
+             ORDER BY profile_id NULLS LAST, name LIMIT 20`,
             [profileId, '%' + searchQuery.toLowerCase() + '%']
           );
           const byNameRows = (byName.rows || []).map(mapRow);
@@ -209,8 +211,9 @@ router.get('/custom/check', async (req, res) => {
     }
     const result = await pool.query(
       `SELECT id, name, brand, barcode, serving_size, serving_unit, calories, protein, fat, carbs
-       FROM foods WHERE source = 'custom' AND profile_id = $1 AND (${conditions.join(' OR ')})
-       ORDER BY name LIMIT 20`,
+       FROM foods WHERE source = 'custom' AND (profile_id = $1 OR profile_id IS NULL)
+       AND (${conditions.join(' OR ')})
+       ORDER BY profile_id NULLS LAST, name LIMIT 20`,
       params
     );
     const matches = (result.rows || []).map(r => ({
@@ -234,11 +237,11 @@ router.get('/custom/check', async (req, res) => {
   }
 });
 
-// Create custom food (scoped to profile)
+// Create custom food (scoped to profile, or universal when universal: true for barcode-added foods)
 router.post('/custom', async (req, res) => {
   try {
     const profileId = req.profileId;
-    const { name, brand, barcode, serving_size, serving_unit, calories, protein, fat, carbs } = req.body || {};
+    const { name, brand, barcode, serving_size, serving_unit, calories, protein, fat, carbs, universal } = req.body || {};
     const n = (name || '').trim();
     const su = ((serving_unit || 'g').trim().toLowerCase());
     if (su !== 'g' && su !== 'oz') {
@@ -257,13 +260,14 @@ router.post('/custom', async (req, res) => {
       return res.status(400).json({ error: 'Serving size is required and must be a positive number' });
     }
     const bc = (barcode || '').trim() || null;
+    const isUniversal = universal === true && bc && bc.length >= 8;
 
     const result = await pool.query(
       `INSERT INTO foods (source, profile_id, name, brand, barcode, serving_size, serving_unit, calories, protein, fat, carbs)
        VALUES ('custom', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING id, name, brand, barcode, serving_size, serving_unit, calories, protein, fat, carbs, created_at`,
       [
-        profileId,
+        isUniversal ? null : profileId,
         n,
         (brand || '').trim() || null,
         bc,
@@ -309,7 +313,7 @@ router.get('/custom/:id', async (req, res) => {
     }
     const result = await pool.query(
       `SELECT id, name, brand, barcode, serving_size, serving_unit, calories, protein, fat, carbs
-       FROM foods WHERE source = 'custom' AND profile_id = $1 AND id = $2`,
+       FROM foods WHERE source = 'custom' AND (profile_id = $1 OR profile_id IS NULL) AND id = $2`,
       [profileId, id]
     );
     if (result.rows.length === 0) {

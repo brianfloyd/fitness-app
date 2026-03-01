@@ -1,9 +1,26 @@
 <script>
   export let dayNumber = 1;
   export let totalDays = 84;
+  export let displayDate = ''; // Optional: show date in compact form (e.g. "Jan 15, 2025")
   export let onPrevious = () => {};
   export let onNext = () => {};
-  
+  export let volume = 0;    // Workout volume (lbs)
+  export let calories = 0;
+  export let protein = 0;   // grams
+  export let steps = 0;
+
+  function compactNum(n) {
+    const num = Number(n) || 0;
+    if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+    return num ? String(Math.round(num)) : '';
+  }
+
+  $: volStr = volume > 0 ? compactNum(volume) : '';
+  $: calStr = calories > 0 ? compactNum(calories) : '';
+  $: proStr = protein > 0 ? compactNum(protein) : '';
+  $: stpStr = steps > 0 ? compactNum(steps) : '';
+  $: hasStats = volStr || calStr || proStr || stpStr;
+
   $: progress = (dayNumber / totalDays) * 100;
   $: percentage = progress.toFixed(1);
   $: daysRemaining = totalDays - dayNumber;
@@ -34,7 +51,12 @@
     {:else}
       <span class="nav-arrow-placeholder"></span>
     {/if}
-    <h2>Day {dayNumber} of {totalDays}</h2>
+    <div class="day-title-block">
+      <h2>Day {dayNumber} of {totalDays}</h2>
+      {#if displayDate}
+        <span class="display-date">{displayDate}</span>
+      {/if}
+    </div>
     {#if showNext}
       <button class="nav-arrow" on:click={handleNext} aria-label="Next day">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -52,6 +74,14 @@
     <span class="progress-percentage">{percentage}%</span>
     <span class="days-remaining">{daysRemaining} left</span>
   </div>
+  {#if hasStats}
+    <div class="day-stats">
+      {#if volStr}<span class="stat">vol {volStr}</span>{/if}
+      {#if calStr}<span class="stat">{calStr} cal</span>{/if}
+      {#if proStr}<span class="stat">{proStr}g P</span>{/if}
+      {#if stpStr}<span class="stat">{stpStr} stp</span>{/if}
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -71,6 +101,19 @@
     gap: var(--spacing-md);
   }
   
+  .day-title-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .display-date {
+    font-size: 0.875rem;
+    color: var(--text-muted, var(--text-secondary));
+    font-weight: 500;
+  }
+
   .day-display h2 {
     font-size: 1.75rem;
     font-weight: 800;
@@ -166,6 +209,20 @@
     font-weight: 500;
     color: var(--text-muted, var(--text-secondary));
     flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .day-stats {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5em 0.75em;
+    margin-top: var(--spacing-xs);
+    font-size: 0.65rem;
+    color: var(--text-muted, var(--text-secondary));
+  }
+
+  .day-stats .stat {
     white-space: nowrap;
   }
   

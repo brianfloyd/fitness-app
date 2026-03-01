@@ -101,7 +101,7 @@
 </script>
 
 <div class="landing">
-  <header class="landing-header">
+  <header class="page-header landing-header">
     <h1>Fitness Daily Log</h1>
     <p class="subtitle">Select your profile</p>
   </header>

@@ -16,8 +16,7 @@
   let selectedFile = null;
   let CropperLib = null;
   let showingGoalPhoto = false;
-  let lastTapTime = 0;
-  let touchHandled = false;
+  let holdToAiTimeout = null;
   
   async function loadCropper() {
     if (!CropperLib) {
@@ -153,38 +152,51 @@
   $: showGoalPhoto = goalPhotoUrl && showingGoalPhoto;
   $: finalDisplayUrl = showGoalPhoto ? goalPhotoUrl : displayUrl;
   
-  function handleMouseEnter() {
-    if (goalPhotoUrl && displayUrl) {
-      showingGoalPhoto = true;
-    }
-  }
-  
   function handleMouseLeave() {
-    showingGoalPhoto = false;
+    clearHoldToAi();
   }
   
-  function handlePhotoTap(event) {
-    // Don't handle if clicking on buttons
+  function clearHoldToAi() {
+    if (holdToAiTimeout) {
+      clearTimeout(holdToAiTimeout);
+      holdToAiTimeout = null;
+    }
+  }
+  
+  function switchToAiAfterHold() {
+    holdToAiTimeout = null;
+    showingGoalPhoto = true;
+  }
+  
+  function handlePointerDown(event) {
     const target = event.target;
-    if (target.closest('.remove-btn') || target.closest('.change-btn')) {
-      return;
-    }
+    if (target.closest('.remove-btn') || target.closest('.change-btn')) return;
+    if (!goalPhotoUrl || !displayUrl) return;
     
-    // Prevent double-firing: if this is a click event right after a touch, ignore it
-    const now = Date.now();
-    if (event.type === 'click' && now - lastTapTime < 300) {
-      return;
+    if (showingGoalPhoto) {
+      // Switching back from AI: instant on tap
+      if (event.type === 'touchstart') event.preventDefault();
+      showingGoalPhoto = false;
+    } else {
+      // Switching to AI: start 3 second hold
+      if (event.type === 'touchstart') event.preventDefault();
+      clearHoldToAi();
+      holdToAiTimeout = setTimeout(switchToAiAfterHold, 3000);
     }
-    
-    // Simple toggle - works for both touch and click
-    if (goalPhotoUrl && displayUrl) {
-      if (event.type === 'touchstart') {
-        event.preventDefault();
-        lastTapTime = now;
-        touchHandled = true;
-      }
-      showingGoalPhoto = !showingGoalPhoto;
-    }
+  }
+  
+  function handlePointerUp(event) {
+    if (event.target.closest('.remove-btn') || event.target.closest('.change-btn')) return;
+    if (!showingGoalPhoto) clearHoldToAi();
+  }
+  
+  function handleKeydown(event) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const target = event.target;
+    if (target.closest('.remove-btn') || target.closest('.change-btn')) return;
+    if (!goalPhotoUrl || !displayUrl) return;
+    event.preventDefault();
+    showingGoalPhoto = !showingGoalPhoto;
   }
   
 </script>
@@ -204,12 +216,14 @@
         class="photo-preview"
         role="button"
         tabindex="0"
-        aria-label={showingGoalPhoto ? "Tap to show actual photo" : "Tap to show AI goal photo"}
-        on:mouseenter={handleMouseEnter}
+        aria-label={showingGoalPhoto ? "Tap to show actual photo" : "Hold 3 seconds to show AI goal photo"}
         on:mouseleave={handleMouseLeave}
-        on:click={handlePhotoTap}
-        on:touchstart={handlePhotoTap}
-        on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { handlePhotoTap(e); } }}
+        on:mousedown={handlePointerDown}
+        on:mouseup={handlePointerUp}
+        on:touchstart={handlePointerDown}
+        on:touchend={handlePointerUp}
+        on:touchcancel={handlePointerUp}
+        on:keydown={handleKeydown}
       >
         <img 
           src={finalDisplayUrl} 

@@ -8,6 +8,7 @@ import { requireProfileId } from './middleware/requireProfileId.js';
 import dailyLogsRoutes from './routes/dailyLogs.js';
 import settingsRoutes from './routes/settings.js';
 import stravaRoutes from './routes/strava.js';
+import fitbitRoutes from './routes/fitbit.js';
 import foodsRoutes from './routes/foods.js';
 import profilesRoutes from './routes/profiles.js';
 
@@ -59,6 +60,7 @@ app.use((req, res, next) => {
 
 // Routes (foods, strava require X-Profile-Id for multi-tenant scoping)
 app.use('/api/strava', requireProfileId, stravaRoutes);
+app.use('/api/fitbit', fitbitRoutes);
 app.use('/api/foods', requireProfileId, foodsRoutes);
 app.use('/api/profiles', profilesRoutes);
 

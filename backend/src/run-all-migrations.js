@@ -14,6 +14,7 @@ const MIGRATIONS = [
   { name: 'add_foods_column.sql', path: join(root, 'database/migrations/add_foods_column.sql') },
   { name: 'add_barcode_to_foods.sql', path: join(root, 'database/migrations/add_barcode_to_foods.sql') },
   { name: 'add_profile_id_to_tables.sql', path: join(root, 'database/migrations/add_profile_id_to_tables.sql') },
+  { name: 'add_fitbit_tokens.sql', path: join(root, 'database/migrations/add_fitbit_tokens.sql') },
 ];
 
 async function run() {

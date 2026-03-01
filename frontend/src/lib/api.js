@@ -70,9 +70,11 @@ export async function getLogByDate(date) {
 export async function saveLog(logData, photoFile) {
   const formData = new FormData();
   // Append all log fields first so multer receives multipart in a consistent order (file last can fix prod parsers)
+  // Explicitly convert to string so multipart parsers handle consistently
   Object.keys(logData).forEach(key => {
-    if (logData[key] !== null && logData[key] !== undefined && logData[key] !== '') {
-      formData.append(key, logData[key]);
+    const val = logData[key];
+    if (val !== null && val !== undefined && val !== '') {
+      formData.append(key, typeof val === 'string' ? val : String(val));
     }
   });
   if (photoFile) {
@@ -80,7 +82,8 @@ export async function saveLog(logData, photoFile) {
   }
 
   if (DEBUG) {
-    console.log('[fitness] saveLog', { date: logData.date, weight: logData.weight, fat_percent: logData.fat_percent, hasPhoto: !!photoFile });
+    const workoutLen = logData.workout ? String(logData.workout).length : 0;
+    console.log('[fitness] saveLog', { date: logData.date, workoutLen, hasPhoto: !!photoFile });
   }
   const response = await fetchWithProfile(`${API_BASE}/logs`, {
     method: 'POST',
@@ -189,11 +192,13 @@ export async function getPreviouslyUsedFoods() {
   return response.json();
 }
 
-export async function createCustomFood(data) {
+export async function createCustomFood(data, options = {}) {
+  const body = { ...data };
+  if (options.universal) body.universal = true;
   const response = await fetchWithProfile(`${API_BASE}/foods/custom`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
@@ -238,6 +243,18 @@ export async function verifyProfile({ username, password }) {
     const err = await response.json().catch(() => ({}));
     throw new Error(err.error || 'Invalid username or password');
   }
+  return response.json();
+}
+
+export async function getFitbitAuthUrl() {
+  const response = await fetchWithProfile(`${API_BASE}/fitbit/auth-url`);
+  ensureOk(response);
+  return response.json();
+}
+
+export async function getFitbitStatus() {
+  const response = await fetchWithProfile(`${API_BASE}/fitbit/status`);
+  ensureOk(response);
   return response.json();
 }
 

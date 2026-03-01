@@ -408,10 +408,13 @@
     const matchesSearch = exerciseSearchTerm === '' || re.name.toLowerCase().includes(exerciseSearchTerm.toLowerCase());
     return matchesGroup && matchesSearch;
   });
+
+  $: hasActiveExercises = exercises.some(e => !e.completed);
 </script>
 
 <div class="workout-exercises">
-  <!-- Muscle Group Selection -->
+  <!-- New entry area: muscle grid + active cards - when active, fits one screen; when none, space goes to logged -->
+  <div class="workout-new-entry" class:has-active={hasActiveExercises}>
   <div class="muscle-group-grid">
     {#each muscleGroups as group}
       <button
@@ -664,41 +667,7 @@
     </div>
   {/if}
   
-  <!-- Exercises List -->
-  <div class="exercises-list">
-    {#each exercises as exercise (exercise.id)}
-      {#if exercise.completed}
-        <!-- Completed Exercise Summary Pill (Clickable to Edit) -->
-        <div 
-          class="exercise-pill clickable-pill" 
-          style="border-left: 3px solid {getMuscleGroupColor(exercise.muscleGroup)};"
-          on:click={() => reopenExerciseForEditing(exercise.id)}
-          role="button"
-          tabindex="0"
-          on:keydown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              reopenExerciseForEditing(exercise.id);
-            }
-          }}
-        >
-          <div class="pill-info">
-            <div class="pill-header">
-              <span class="pill-badge" style="background-color: {getMuscleGroupColor(exercise.muscleGroup)}20; color: {getMuscleGroupColor(exercise.muscleGroup)};">
-                {exercise.muscleGroup}
-              </span>
-              <span class="pill-name">{exercise.name}</span>
-            </div>
-            <span class="pill-stats">
-              {calculateTotalReps(exercise.sets)} reps • {calculateTotalVolume(exercise.sets).toLocaleString('en-US', { maximumFractionDigits: 0 })} lbs
-            </span>
-          </div>
-        </div>
-      {/if}
-    {/each}
-  </div>
-  
-  <!-- Active Exercise Entry Cards (Full Width) -->
+  <!-- Active Exercise Entry Cards (New entry area - stays at top) -->
   <div class="active-exercises-list">
     {#each exercises as exercise (exercise.id)}
       {#if !exercise.completed}
@@ -723,7 +692,7 @@
               <span>Reps</span>
               <span></span>
             </div>
-            
+            <div class="sets-rows-scroll">
             {#each exercise.sets as set, index (set.id)}
               <div class="set-row">
                 <span class="set-number">{index + 1}</span>
@@ -776,7 +745,7 @@
                 </button>
               </div>
             {/each}
-            
+            </div>
             <div class="exercise-actions">
               <button type="button" class="add-set-btn" on:click={() => addSet(exercise.id)}>
                 + Add Set
@@ -805,7 +774,40 @@
         </div>
       {/if}
     {/each}
-    
+  </div>
+  </div>
+  
+  <!-- Previously Logged Exercises (below fold - scroll to see) -->
+  <div class="exercises-list">
+    {#each exercises as exercise (exercise.id)}
+      {#if exercise.completed}
+        <div 
+          class="exercise-pill clickable-pill" 
+          style="border-left: 3px solid {getMuscleGroupColor(exercise.muscleGroup)};"
+          on:click={() => reopenExerciseForEditing(exercise.id)}
+          role="button"
+          tabindex="0"
+          on:keydown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              reopenExerciseForEditing(exercise.id);
+            }
+          }}
+        >
+          <div class="pill-info">
+            <div class="pill-header">
+              <span class="pill-badge" style="background-color: {getMuscleGroupColor(exercise.muscleGroup)}20; color: {getMuscleGroupColor(exercise.muscleGroup)};">
+                {exercise.muscleGroup}
+              </span>
+              <span class="pill-name">{exercise.name}</span>
+            </div>
+            <span class="pill-stats">
+              {calculateTotalReps(exercise.sets)} reps • {calculateTotalVolume(exercise.sets).toLocaleString('en-US', { maximumFractionDigits: 0 })} lbs
+            </span>
+          </div>
+        </div>
+      {/if}
+    {/each}
   </div>
 </div>
 
@@ -814,6 +816,11 @@
     width: 100%;
     max-width: 100%;
     overflow: hidden;
+  }
+
+  .workout-new-entry {
+    display: flex;
+    flex-direction: column;
   }
   
   .muscle-group-grid {
@@ -1060,6 +1067,69 @@
     .pill-stats {
       font-size: 0.8125rem;
     }
+    /* Compact new-entry area: no scroll, all fits on one screen, logged exercises below fold */
+    .muscle-group-grid {
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--spacing-xs);
+      margin-bottom: var(--spacing-xs);
+      flex-shrink: 0;
+    }
+    .muscle-group-btn {
+      padding: 4px 2px;
+      min-height: 40px;
+    }
+    .muscle-icon {
+      font-size: 1.1rem;
+    }
+    .muscle-group-btn .muscle-name {
+      font-size: 0.6rem;
+    }
+    .active-exercises-list {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .active-exercises-list .exercise-card {
+      padding: var(--spacing-xs) var(--spacing-sm);
+      flex-shrink: 0;
+    }
+    .active-exercises-list .exercise-header {
+      margin-bottom: 2px;
+    }
+    .active-exercises-list .sets-container {
+      margin-top: 2px;
+    }
+    .active-exercises-list .sets-header {
+      padding: 2px 0;
+      margin-bottom: var(--spacing-xs);
+      font-size: 0.7rem;
+    }
+    .active-exercises-list .set-row {
+      margin-bottom: var(--spacing-xs);
+    }
+    .active-exercises-list .set-row input {
+      padding: 4px 6px;
+      font-size: 0.9rem;
+      min-height: 32px;
+    }
+    .active-exercises-list .exercise-actions {
+      margin-top: var(--spacing-xs);
+      padding-top: var(--spacing-xs);
+      flex-shrink: 0;
+    }
+    .active-exercises-list .add-set-btn,
+    .active-exercises-list .delete-exercise-btn,
+    .active-exercises-list .complete-exercise-btn {
+      padding: var(--spacing-xs) var(--spacing-sm);
+      font-size: 0.875rem;
+      min-height: 36px;
+    }
+    .workout-new-entry.has-active {
+      min-height: calc(100svh - 200px);
+    }
+    .exercises-list {
+      margin-top: var(--spacing-lg);
+    }
   }
   
   .exercises-list {
@@ -1105,7 +1175,7 @@
   .exercise-header {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
     margin-bottom: var(--spacing-md);
   }
   
@@ -1113,6 +1183,10 @@
     flex: 1;
     min-width: 0;
     overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
   }
   
   .muscle-badge {
@@ -1122,7 +1196,7 @@
     border-radius: var(--border-radius-sm);
     font-size: 0.75rem;
     font-weight: 600;
-    margin-bottom: var(--spacing-xs);
+    flex-shrink: 0;
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
@@ -1138,12 +1212,12 @@
   
   
   .sets-container {
-    margin-top: var(--spacing-md);
+    margin-top: var(--spacing-sm);
     width: 100%;
     max-width: 100%;
     overflow: hidden;
   }
-  
+
   .sets-header {
     display: grid;
     grid-template-columns: 40px 1fr 1fr 32px;

@@ -209,16 +209,14 @@ router.post('/', upload.single('photo'), async (req, res) => {
       steps,
     } = body;
     const logDate = date || new Date().toISOString().split('T')[0];
-    if (process.env.NODE_ENV === 'production') {
-      console.log('[logs] POST', {
-        profileId,
-        logDate,
-        bodyKeys: typeof req.body === 'object' && req.body ? Object.keys(req.body) : 'none',
-        weight: body.weight,
-        fat_percent: body.fat_percent,
-        hasFile: !!req.file,
-      });
-    }
+    const workoutLen = typeof body.workout === 'string' ? body.workout.length : 0;
+    console.log('[logs] POST', {
+      profileId,
+      logDate,
+      bodyKeys: typeof req.body === 'object' && req.body ? Object.keys(req.body) : 'none',
+      workoutLen,
+      hasFile: !!req.file,
+    });
     const dayNumber = await calculateDayNumber(profileId, logDate);
     const existing = await pool.query(
       'SELECT id FROM daily_logs WHERE profile_id = $1 AND date = $2',

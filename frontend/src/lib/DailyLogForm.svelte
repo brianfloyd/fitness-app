@@ -9,7 +9,10 @@
   import WorkoutExercises from './WorkoutExercises.svelte';
   import GraphView from './GraphView.svelte';
   import FoodTracker from './FoodTracker.svelte';
-  
+
+  export let mobileView = undefined;
+  $: isMobile = mobileView != null;
+
   let loading = true;
   let saving = false;
   let error = null;
@@ -45,12 +48,11 @@
   let foods = []; // Array of food entries
   let foodMacros = { protein: 0, fat: 0, carbs: 0, calories: 0 }; // Macros from foods
   
-  // Calculate total calories from macros (manual + foods)
-  // Protein: 4 cal/g, Carbs: 4 cal/g, Fat: 9 cal/g
+  // Calculate total calories from foods only
   $: totalCalories = (() => {
-    const p = (parseFloat(protein) || 0) + foodMacros.protein;
-    const f = (parseFloat(fat) || 0) + foodMacros.fat;
-    const c = (parseFloat(carbs) || 0) + foodMacros.carbs;
+    const p = foodMacros.protein || 0;
+    const f = foodMacros.fat || 0;
+    const c = foodMacros.carbs || 0;
     return (p * 4) + (f * 9) + (c * 4);
   })();
   
@@ -442,9 +444,9 @@
         logData.workout = workoutExercises.length > 0 ? JSON.stringify(workoutExercises) : null;
         await saveLog(logData, null);
       } else if (copyCategory === 'macros') {
-        logData.protein = protein || null;
-        logData.fat = fat || null;
-        logData.carbs = carbs || null;
+        logData.protein = foodMacros.protein > 0 ? foodMacros.protein : null;
+        logData.fat = foodMacros.fat > 0 ? foodMacros.fat : null;
+        logData.carbs = foodMacros.carbs > 0 ? foodMacros.carbs : null;
         logData.foods = foods.length > 0 ? JSON.stringify(foods) : null;
         await saveLog(logData, null);
       }
@@ -515,10 +517,10 @@
           date: selectedDate,
           weight: weight || null,
           fat_percent: fatPercent || null,
-          workout: workoutExercises.length > 0 ? JSON.stringify(workoutExercises) : null,
-          protein: protein || null,
-          fat: fat || null,
-          carbs: carbs || null,
+          workout: JSON.stringify(workoutExercises || []),
+          protein: foodMacros.protein > 0 ? foodMacros.protein : null,
+          fat: foodMacros.fat > 0 ? foodMacros.fat : null,
+          carbs: foodMacros.carbs > 0 ? foodMacros.carbs : null,
           foods: foods.length > 0 ? JSON.stringify(foods) : null,
           sleep_time: formattedSleepTime,
           sleep_score: sleepScore || null,
@@ -571,8 +573,8 @@
   
   // Auto-save reactive statements - trigger save when any field changes
   $: if (isDataLoaded && !loading) {
-    // Watch for changes in weight, fatPercent, protein, fat, carbs, sleepTime, sleepScore, steps, foods
-    weight, fatPercent, protein, fat, carbs, sleepTime, sleepScore, steps, foods;
+    // Watch for changes in weight, fatPercent, sleepTime, sleepScore, steps, foods
+    weight, fatPercent, sleepTime, sleepScore, steps, foods;
     autoSave();
   }
   
@@ -646,8 +648,158 @@
 <div class="daily-log-form">
   {#if loading}
     <div class="loading">Loading...</div>
+  {:else if isMobile}
+    <!-- Mobile views -->
+    {#if mobileView === 'home' || mobileView === 'settings'}
+      <div class="mobile-home">
+        <DayCounter
+          {dayNumber}
+          {totalDays}
+          displayDate={selectedDate ? new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}
+          onPrevious={navigateToPreviousDay}
+          onNext={navigateToNextDay}
+          volume={totalWorkoutVolume}
+          calories={totalCalories}
+          protein={foodMacros.protein || 0}
+          steps={parseFloat(steps) || 0}
+        />
+        <div class="card mobile-photo-card">
+          <div class="section-with-copy mobile-photo-wrap">
+            <PhotoUpload {currentPhotoUrl} {photoMimeType} {goalPhotoUrl} on:photoSelected={handlePhotoSelected} on:photoRemoved={handlePhotoRemoved} />
+          </div>
+        </div>
+        <div class="mobile-body-inline">
+          <input type="number" step="0.1" bind:value={weight} placeholder="weight" class="mobile-body-input" />
+          <input type="number" step="0.1" bind:value={fatPercent} placeholder="body fat" class="mobile-body-input" />
+        </div>
+      </div>
+    {:else if mobileView === 'workout'}
+      <div class="mobile-view-card">
+        <DayCounter
+          {dayNumber}
+          {totalDays}
+          displayDate={selectedDate ? new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}
+          onPrevious={navigateToPreviousDay}
+          onNext={navigateToNextDay}
+          volume={totalWorkoutVolume}
+          calories={totalCalories}
+          protein={foodMacros.protein || 0}
+          steps={parseFloat(steps) || 0}
+        />
+        <div class="card">
+          <div class="form-section">
+            <div class="section-header-wrapper">
+              <h3 class="section-header">
+                <span class="header-left">
+                  <svg class="section-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6.5 6.5h11v11h-11z"></path><path d="M6.5 6.5l5.5 5.5 5.5-5.5"></path><path d="M12 12v6"></path><path d="M8 17h8"></path></svg>
+                  Workout
+                </span>
+                <div class="header-actions">
+                  <button type="button" class="graph-icon-btn" on:click|stopPropagation={() => openGraphModal('workout')} aria-label="Graph">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                  </button>
+                  <button type="button" class="copy-icon-btn" on:click|stopPropagation={() => openCopyModal('workout')} aria-label="Copy">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                  </button>
+                </div>
+              </h3>
+            </div>
+            <WorkoutExercises bind:exercises={workoutExercises} on:exercisesChanged={(e) => { workoutExercises = e.detail; }} />
+          </div>
+        </div>
+      </div>
+    {:else if mobileView === 'food'}
+      <div class="mobile-view-card">
+        <DayCounter
+          {dayNumber}
+          {totalDays}
+          displayDate={selectedDate ? new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}
+          onPrevious={navigateToPreviousDay}
+          onNext={navigateToNextDay}
+          volume={totalWorkoutVolume}
+          calories={totalCalories}
+          protein={foodMacros.protein || 0}
+          steps={parseFloat(steps) || 0}
+        />
+        <div class="card">
+          <div class="form-section">
+            <h3 class="section-header">
+              <div class="food-header-macros">
+                <span class="food-macro-badge protein">P {foodMacros.protein.toFixed(1)}g</span>
+                <span class="food-macro-badge fat">F {foodMacros.fat.toFixed(1)}g</span>
+                <span class="food-macro-badge carbs">C {foodMacros.carbs.toFixed(1)}g</span>
+                <span class="food-macro-badge calories">{totalCalories > 0 ? Math.round(totalCalories) : '—'} cal</span>
+              </div>
+              <button type="button" class="graph-icon-btn" on:click|stopPropagation={() => openGraphModal('macros')} aria-label="View macros graph" title="View macros graph">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+              </button>
+              <div class="header-actions">
+                <button type="button" class="copy-icon-btn" on:click|stopPropagation={() => openCopyModal('macros')} aria-label="Copy">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                </button>
+              </div>
+            </h3>
+            <FoodTracker bind:foods on:totals={handleFoodTotals} on:change={handleFoodsChange} />
+          </div>
+        </div>
+      </div>
+    {:else if mobileView === 'stats'}
+      <div class="mobile-view-card">
+        <DayCounter
+          {dayNumber}
+          {totalDays}
+          displayDate={selectedDate ? new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}
+          onPrevious={navigateToPreviousDay}
+          onNext={navigateToNextDay}
+          volume={totalWorkoutVolume}
+          calories={totalCalories}
+          protein={foodMacros.protein || 0}
+          steps={parseFloat(steps) || 0}
+        />
+        <div class="card">
+          <div class="form-section">
+            <h3 class="section-header">
+              Sleep & Activity
+              <div class="header-actions">
+                <button type="button" class="graph-icon-btn" on:click|stopPropagation={() => openGraphModal('sleep')} aria-label="Graph">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                </button>
+                <button type="button" class="copy-icon-btn" on:click|stopPropagation={() => openCopyModal('sleep')} aria-label="Copy">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                </button>
+              </div>
+            </h3>
+            <div class="grid grid-2">
+              <SleepTimeInput bind:value={sleepTime} />
+              <MetricInput label="Sleep Score" type="number" min="0" max="100" bind:value={sleepScore} />
+            </div>
+            <div class="grid grid-1">
+              <div class="steps-input-wrapper">
+                <svg class="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
+                <MetricInput label="Steps" type="number" bind:value={steps} placeholder="Steps" />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="form-section">
+            <h3 class="section-header">
+              <svg class="section-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+              Strava Activities
+            </h3>
+            <StravaActivities bind:activities={stravaActivities} on:activitiesChanged={(e) => { stravaActivities = e.detail; }} />
+          </div>
+        </div>
+      </div>
+    {/if}
+    <div class="status-messages">
+      {#if error}
+        <div class="error-message">{error}</div>
+      {/if}
+    </div>
   {:else}
-    <DayCounter {dayNumber} {totalDays} onPrevious={navigateToPreviousDay} onNext={navigateToNextDay} />
+    <!-- Desktop layout -->
+    <DayCounter {dayNumber} {totalDays} onPrevious={navigateToPreviousDay} onNext={navigateToNextDay} volume={totalWorkoutVolume} calories={totalCalories} protein={foodMacros.protein || 0} steps={parseFloat(steps) || 0} />
     
     <div class="form-layout">
         <!-- Left Column: Photo, Date, Body Composition, and Sleep -->
@@ -842,23 +994,18 @@
           <div class="card">
             <div class="form-section">
               <h3 class="section-header">
-                <svg class="section-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
-                  <line x1="3" y1="6" x2="21" y2="6"></line>
-                  <path d="M16 10a4 4 0 0 1-8 0"></path>
-                </svg>
-                Macros
+                <div class="food-header-macros">
+                  <span class="food-macro-badge protein">P {foodMacros.protein.toFixed(1)}g</span>
+                  <span class="food-macro-badge fat">F {foodMacros.fat.toFixed(1)}g</span>
+                  <span class="food-macro-badge carbs">C {foodMacros.carbs.toFixed(1)}g</span>
+                  <span class="food-macro-badge calories">{totalCalories > 0 ? Math.round(totalCalories) : '—'} cal</span>
+                </div>
+                <button type="button" class="graph-icon-btn" on:click|stopPropagation={() => openGraphModal('macros')} aria-label="View macros graph" title="View macros graph">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                </button>
                 <div class="header-actions">
-                  <button type="button" class="graph-icon-btn" on:click|stopPropagation={() => openGraphModal('macros')} aria-label="View macros graph">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-                    </svg>
-                  </button>
-                  <button type="button" class="copy-icon-btn" on:click|stopPropagation={() => openCopyModal('macros')} aria-label="Copy macros to another date">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                    </svg>
+                  <button type="button" class="copy-icon-btn" on:click|stopPropagation={() => openCopyModal('macros')} aria-label="Copy">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                   </button>
                 </div>
               </h3>
@@ -867,25 +1014,6 @@
                 on:totals={handleFoodTotals}
                 on:change={handleFoodsChange}
               />
-              <div class="grid grid-3">
-                <MetricInput label="Protein" type="number" step="0.1" bind:value={protein} placeholder="g" />
-                <MetricInput label="Fat" type="number" step="0.1" bind:value={fat} placeholder="g" />
-                <MetricInput label="Carbs" type="number" step="0.1" bind:value={carbs} placeholder="g" />
-              </div>
-              <div class="calories-display">
-                <div class="calories-label">Total Calories</div>
-                <div class="calories-value">{totalCalories > 0 ? Math.round(totalCalories) : '—'}</div>
-              </div>
-              {#if (foodMacros.protein > 0 || foodMacros.fat > 0 || foodMacros.carbs > 0)}
-                <div class="food-macros-summary">
-                  <div class="summary-label">From Foods:</div>
-                  <div class="summary-values">
-                    <span class="summary-macro protein">P: {foodMacros.protein.toFixed(1)}g</span>
-                    <span class="summary-macro fat">F: {foodMacros.fat.toFixed(1)}g</span>
-                    <span class="summary-macro carbs">C: {foodMacros.carbs.toFixed(1)}g</span>
-                  </div>
-                </div>
-              {/if}
             </div>
           </div>
 
@@ -912,14 +1040,6 @@
       <div class="status-messages">
         {#if error}
           <div class="error-message">{error}</div>
-        {/if}
-        
-        {#if success}
-          <div class="success-message">Changes saved automatically</div>
-        {/if}
-        
-        {#if saving}
-          <div class="saving-indicator">Saving...</div>
         {/if}
       </div>
   {/if}
@@ -1290,6 +1410,12 @@
     grid-template-columns: 1fr 1fr;
     gap: var(--spacing-md);
   }
+
+  @media (max-width: 767px) {
+    .form-row {
+      grid-template-columns: 1fr;
+    }
+  }
   
   .date-input-wrapper {
     position: relative;
@@ -1326,68 +1452,44 @@
     grid-template-columns: 1fr 1fr 1fr;
   }
 
-  .food-macros-summary {
+  .food-header-macros {
     display: flex;
     align-items: center;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-sm);
+    gap: var(--spacing-xs);
+    flex-shrink: 0;
+  }
+
+  .food-header-macros .food-macro-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 2px var(--spacing-xs);
+    border-radius: var(--border-radius-sm);
     background-color: var(--surface);
     border: 1px solid var(--border);
-    border-radius: var(--border-radius-sm);
-    font-size: 0.875rem;
-    margin-top: var(--spacing-sm);
   }
-  
-  .summary-label {
-    color: var(--text-secondary);
-    font-weight: 600;
-  }
-  
-  .summary-values {
-    display: flex;
-    gap: var(--spacing-md);
-  }
-  
-  .summary-macro {
-    font-weight: 600;
-  }
-  
-  .summary-macro.protein {
+
+  .food-header-macros .food-macro-badge.protein {
     color: #3b82f6;
+    border-color: rgba(59, 130, 246, 0.3);
   }
-  
-  .summary-macro.fat {
+
+  .food-header-macros .food-macro-badge.fat {
     color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.3);
   }
-  
-  .summary-macro.carbs {
+
+  .food-header-macros .food-macro-badge.carbs {
     color: #10b981;
-  }
-  
-  .calories-display {
-    margin-top: var(--spacing-md);
-    padding: var(--spacing-md) var(--spacing-lg);
-    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%);
-    border: 1px solid var(--border-light);
-    border-radius: var(--border-radius-sm);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    border-color: rgba(16, 185, 129, 0.3);
   }
 
-  .calories-label {
-    font-size: 0.875rem;
-    color: var(--text-secondary);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+  .food-header-macros .food-macro-badge.calories {
+    color: var(--text-primary);
   }
 
-  .calories-value {
-    font-size: 1.75rem;
-    font-weight: 700;
-    color: var(--primary-color);
-    text-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+  .section-title {
+    flex: 1;
+    min-width: 0;
   }
 
   @media (max-width: 600px) {
@@ -1402,46 +1504,10 @@
     }
   }
   
-  .saving-indicator {
-    background-color: rgba(59, 130, 246, 0.15);
-    border: 1px solid rgba(59, 130, 246, 0.3);
-    color: var(--primary-color);
-    padding: var(--spacing-sm) var(--spacing-md);
-    border-radius: var(--border-radius-sm);
-    margin-bottom: var(--spacing-md);
-    font-size: 0.875rem;
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-  }
-  
-  .saving-indicator::before {
-    content: '';
-    width: 12px;
-    height: 12px;
-    border: 2px solid var(--primary-color);
-    border-top-color: transparent;
-    border-radius: 50%;
-    animation: spin 0.6s linear infinite;
-  }
-  
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-  
   .error-message {
     background-color: rgba(239, 68, 68, 0.15);
     border: 1px solid rgba(239, 68, 68, 0.3);
     color: #fca5a5;
-    padding: var(--spacing-md);
-    border-radius: var(--border-radius-sm);
-    margin-bottom: var(--spacing-md);
-  }
-  
-  .success-message {
-    background-color: rgba(16, 185, 129, 0.15);
-    border: 1px solid rgba(16, 185, 129, 0.3);
-    color: #6ee7b7;
     padding: var(--spacing-md);
     border-radius: var(--border-radius-sm);
     margin-bottom: var(--spacing-md);
@@ -1668,5 +1734,140 @@
     .section-header {
       font-size: 1.125rem;
     }
+  }
+
+  /* Mobile home compact layout - no scroll, all on one screen */
+  .mobile-home {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    padding-bottom: var(--spacing-xs);
+    height: calc(100svh - 92px - env(safe-area-inset-top) - 2 * env(safe-area-inset-bottom));
+    max-height: calc(100svh - 92px - env(safe-area-inset-top) - 2 * env(safe-area-inset-bottom));
+    overflow: hidden;
+  }
+
+  .mobile-home :global(.day-counter) {
+    margin-bottom: 0;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    flex-shrink: 0;
+  }
+
+  .mobile-home :global(.day-display h2) {
+    font-size: 1.125rem;
+  }
+
+  .mobile-home :global(.progress-container) {
+    margin-top: 0;
+  }
+
+  .mobile-photo-card {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .mobile-photo-wrap {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .mobile-photo-wrap :global(.photo-upload) {
+    margin: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .mobile-photo-wrap :global(.photo-container) {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+  }
+
+  .mobile-photo-wrap :global(.photo-preview) {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+  }
+
+  .mobile-photo-wrap :global(.photo-image) {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .mobile-photo-wrap :global(.photo-placeholder) {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .mobile-photo-wrap :global(.section-label) {
+    display: none;
+  }
+
+  .mobile-body-inline {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-sm);
+    flex-shrink: 0;
+  }
+
+  .mobile-body-input {
+    width: 100%;
+    padding: var(--spacing-md);
+    font-size: 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--border-radius-sm);
+    color: var(--text-primary);
+  }
+
+  .mobile-body-input::placeholder {
+    color: var(--text-muted);
+  }
+
+  .mobile-view-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    padding-bottom: var(--spacing-md);
+  }
+
+  .mobile-view-card :global(.day-counter) {
+    margin-bottom: 0;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    flex-shrink: 0;
+  }
+
+  .mobile-view-card :global(.day-display h2) {
+    font-size: 1.125rem;
+  }
+
+  .mobile-view-card :global(.progress-container) {
+    margin-top: 0;
+  }
+
+  /* Workout: compact new-entry area so muscle grid + active card fit on one screen */
+  .mobile-view-card :global(.workout-exercises) {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .mobile-view-card :global(.form-section) :global(.section-header-wrapper) {
+    margin-bottom: var(--spacing-xs);
+  }
+  .mobile-view-card :global(.form-section) :global(.section-header) {
+    font-size: 0.9375rem;
+  }
+  .mobile-view-card :global(.form-section) {
+    padding: var(--spacing-sm);
+    padding-bottom: calc(var(--spacing-xl) + 20px);
   }
 </style>

@@ -194,27 +194,19 @@
 </script>
 
 <div class="food-tracker">
+  <FoodSearch on:foodSelected={handleFoodSelected} />
+  
   <CommonFoods
     {commonFoods}
     on:update={handleCommonFoodsUpdate}
     on:foodAdded={handleFoodAdded}
   />
   
-  <FoodSearch on:foodSelected={handleFoodSelected} />
-  
   {#if foods.length > 0}
     <div class="foods-list">
       <div class="foods-list-header">
-        <h4>Added Foods ({foods.length})</h4>
-        <div class="food-totals">
-          <span class="total-label">Total:</span>
-          <span class="total-macro protein">{totalMacros.protein.toFixed(1)}g</span>
-          <span class="total-macro fat">{totalMacros.fat.toFixed(1)}g</span>
-          <span class="total-macro carbs">{totalMacros.carbs.toFixed(1)}g</span>
-          <span class="total-macro calories">{totalMacros.calories} cal</span>
-        </div>
+        <span class="added-foods-count">Added Foods ({foods.length})</span>
       </div>
-      
       <div class="food-entries">
         {#each foods as food (food.id || (food.customFoodId != null ? `custom-${food.customFoodId}` : food.fdcId) || `food-${foods.indexOf(food)}`)}
           {@const entryId = food.id || (food.customFoodId != null ? `custom-${food.customFoodId}` : String(food.fdcId)) || `food-${foods.indexOf(food)}`}
@@ -231,7 +223,7 @@
     </div>
   {:else}
     <div class="empty-state">
-      <p>No foods added yet. Search for foods above or use common foods.</p>
+      <p>No foods added yet. Search above or use recent foods.</p>
     </div>
   {/if}
 </div>
@@ -244,59 +236,15 @@
   .foods-list {
     margin-top: var(--spacing-lg);
   }
-  
+
   .foods-list-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
     margin-bottom: var(--spacing-md);
-    flex-wrap: wrap;
-    gap: var(--spacing-sm);
   }
-  
-  .foods-list-header h4 {
+
+  .added-foods-count {
     margin: 0;
     font-size: 1rem;
     font-weight: 600;
-    color: var(--text-primary);
-  }
-  
-  .food-totals {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    font-size: 0.875rem;
-  }
-  
-  .total-label {
-    color: var(--text-secondary);
-    font-weight: 600;
-  }
-  
-  .total-macro {
-    font-weight: 600;
-    padding: var(--spacing-xs) var(--spacing-sm);
-    border-radius: var(--border-radius-sm);
-    background-color: var(--surface);
-    border: 1px solid var(--border);
-  }
-  
-  .total-macro.protein {
-    color: #3b82f6;
-    border-color: rgba(59, 130, 246, 0.3);
-  }
-  
-  .total-macro.fat {
-    color: #ef4444;
-    border-color: rgba(239, 68, 68, 0.3);
-  }
-  
-  .total-macro.carbs {
-    color: #10b981;
-    border-color: rgba(16, 185, 129, 0.3);
-  }
-  
-  .total-macro.calories {
     color: var(--text-primary);
   }
   

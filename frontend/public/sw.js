@@ -93,7 +93,7 @@ self.addEventListener('fetch', (event) => {
       event.respondWith(
         fetch(request)
           .then((response) => {
-            if (response && response.status === 200 && response.type === 'basic') {
+            if (request.method === 'GET' && response && response.status === 200 && response.type === 'basic') {
               const clone = response.clone();
               caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, clone).catch(() => {}));
             }
@@ -113,8 +113,8 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          // Only cache successful responses (async, don't block)
-          if (response && response.status === 200 && response.type === 'basic') {
+          // Only cache GET requests - Cache API doesn't support POST/PUT/DELETE
+          if (request.method === 'GET' && response && response.status === 200 && response.type === 'basic') {
             const responseToCache = response.clone();
             caches.open(RUNTIME_CACHE).then((cache) => {
               cache.put(request, responseToCache).catch(err => {
@@ -138,15 +138,17 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // API requests - network first, cache fallback
+  // API requests - network first, cache fallback (only GET - Cache API rejects POST/PUT/DELETE)
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const responseToCache = response.clone();
-          caches.open(RUNTIME_CACHE).then((cache) => {
-            cache.put(request, responseToCache);
-          });
+          if (request.method === 'GET') {
+            const responseToCache = response.clone();
+            caches.open(RUNTIME_CACHE).then((cache) => {
+              cache.put(request, responseToCache).catch(() => {});
+            });
+          }
           return response;
         })
         .catch((err) => {
@@ -166,7 +168,7 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(request)
       .then((response) => {
-        if (response && response.status === 200 && response.type === 'basic') {
+        if (request.method === 'GET' && response && response.status === 200 && response.type === 'basic') {
           const responseToCache = response.clone();
           caches.open(RUNTIME_CACHE).then((cache) => {
             cache.put(request, responseToCache).catch(err => {
