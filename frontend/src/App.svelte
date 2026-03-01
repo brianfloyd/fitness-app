@@ -57,7 +57,7 @@
   <main>
     <!-- Desktop header -->
     <header class="desktop-header">
-      <img src="/fit-myaiway-logo.png" alt="Fit MyAIWay" class="header-logo" />
+      <img src="/fit-myaiway-logo.svg" alt="Fit MyAIWay" class="header-logo" />
       <div class="header-row">
         <nav>
           <button class="nav-btn" class:active={currentView === 'log'} on:click={showLog}>
