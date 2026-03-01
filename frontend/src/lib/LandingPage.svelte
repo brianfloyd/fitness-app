@@ -166,7 +166,7 @@
 
 <div class="landing">
   <header class="page-header landing-header">
-    <img src="/fit-myaiway-logo.svg" alt="Fit MyAIWay" class="brand-logo" />
+    <img src="/fit-myaiway-logo.png" alt="Fit MyAIWay" class="brand-logo" />
     <p class="subtitle">Select your profile</p>
   </header>
 
