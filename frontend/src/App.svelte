@@ -57,7 +57,7 @@
   <main>
     <!-- Desktop header -->
     <header class="desktop-header">
-      <h1>Fitness Daily Log</h1>
+      <img src="/fit-myaiway-logo.svg" alt="Fit MyAIWay" class="header-logo" />
       <div class="header-row">
         <nav>
           <button class="nav-btn" class:active={currentView === 'log'} on:click={showLog}>
@@ -201,15 +201,11 @@
       text-align: center;
     }
 
-    .desktop-header h1 {
-      font-size: 2.5rem;
-      font-weight: 800;
-      background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      margin-bottom: var(--spacing-lg);
-      letter-spacing: -0.02em;
+    .header-logo {
+      max-width: 220px;
+      height: auto;
+      margin: 0 auto var(--spacing-lg);
+      display: block;
     }
 
     .header-row {

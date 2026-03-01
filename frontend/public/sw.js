@@ -1,4 +1,4 @@
-// Service Worker for Fitness Daily Log PWA
+// Service Worker for Fit MyAIWay PWA
 const CACHE_NAME = 'fitness-daily-log-v1';
 const RUNTIME_CACHE = 'fitness-runtime-v1';
 

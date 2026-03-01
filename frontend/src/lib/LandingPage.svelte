@@ -166,7 +166,7 @@
 
 <div class="landing">
   <header class="page-header landing-header">
-    <h1>Fitness Daily Log</h1>
+    <img src="/fit-myaiway-logo.svg" alt="Fit MyAIWay" class="brand-logo" />
     <p class="subtitle">Select your profile</p>
   </header>
 
@@ -284,14 +284,12 @@
     margin-bottom: var(--spacing-xl);
   }
 
-  .landing-header h1 {
-    font-size: 2rem;
-    font-weight: 800;
-    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    margin-bottom: var(--spacing-xs);
+  .brand-logo {
+    max-width: 280px;
+    width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto var(--spacing-md);
   }
 
   .subtitle {
@@ -449,8 +447,8 @@
   }
 
   @media (min-width: 768px) {
-    .landing-header h1 {
-      font-size: 2.5rem;
+    .brand-logo {
+      max-width: 340px;
     }
   }
 </style>

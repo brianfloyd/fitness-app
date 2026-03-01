@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Google OAuth Test</title>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+  <h1>Google OAuth Minimal Test</h1>
+  <p>Origin: <code id="origin"></code></p>
+  <p>Client ID from API: <code id="client-id">loading...</code></p>
+  <div id="button-container" style="min-height:44px;margin:1rem 0"></div>
+  <pre id="result"></pre>
+  <script>
+    document.getElementById('origin').textContent = window.location.origin;
+    fetch('/api/auth/config')
+      .then(r => r.json())
+      .then(data => {
+        const id = data.googleClientId || '(null)';
+        document.getElementById('client-id').textContent = id.length > 40 ? id.slice(0,20) + '...' + id.slice(-15) : id;
+        if (!data.googleClientId) {
+          document.getElementById('result').textContent = 'No client ID from API';
+          return;
+        }
+        if (window.google?.accounts?.id) {
+          init(data.googleClientId);
+        } else {
+          window.onload = () => init(data.googleClientId);
+        }
+      })
+      .catch(e => {
+        document.getElementById('result').textContent = 'API error: ' + e.message;
+      });
+    function init(clientId) {
+      google.accounts.id.initialize({
+        client_id: clientId,
+        callback: (r) => {
+          document.getElementById('result').textContent = r.credential ? 'SUCCESS: Got credential' : 'No credential in response';
+        },
+        auto_select: false
+      });
+      google.accounts.id.renderButton(document.getElementById('button-container'), {
+        type: 'standard', theme: 'filled_black', size: 'large', text: 'continue_with', width: 280
+      });
+    }
+  </script>
+</body>
+</html>
