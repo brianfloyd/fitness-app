@@ -235,8 +235,13 @@ export async function createProfile({ username, password }) {
 
 export async function getAuthConfig() {
   const response = await fetch(`${API_BASE}/auth/config`);
-  if (!response.ok) return { googleClientId: null };
-  return response.json();
+  if (!response.ok) {
+    if (DEBUG) console.warn('[fitness] auth/config failed:', response.status);
+    return { googleClientId: null };
+  }
+  const data = await response.json();
+  if (DEBUG) console.log('[fitness] auth/config:', { hasClientId: !!data?.googleClientId });
+  return data;
 }
 
 export async function verifyGoogleAuth(credential) {

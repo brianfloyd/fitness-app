@@ -7,7 +7,17 @@ const client = process.env.GOOGLE_CLIENT_ID ? new OAuth2Client(process.env.GOOGL
 
 // GET /api/auth/config - public config for frontend (client ID only)
 router.get('/config', (req, res) => {
-  res.json({ googleClientId: process.env.GOOGLE_CLIENT_ID || null });
+  const id = process.env.GOOGLE_CLIENT_ID || null;
+  // Debug: include whether var is present (helps troubleshoot Railway env)
+  const debug = process.env.NODE_ENV === 'development' || req.query.debug === '1';
+  const payload = { googleClientId: id };
+  if (debug) {
+    payload._debug = {
+      hasGoogleClientId: !!process.env.GOOGLE_CLIENT_ID,
+      hasGoogleClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
+    };
+  }
+  res.json(payload);
 });
 
 // POST /api/auth/google - verify Google ID token and sign in

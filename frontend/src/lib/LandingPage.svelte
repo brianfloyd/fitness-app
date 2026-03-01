@@ -21,10 +21,14 @@
 
   onMount(async () => {
     await loadProfiles();
-    const config = await getAuthConfig();
-    if (config?.googleClientId) {
-      googleClientId = config.googleClientId;
-      initGoogleSignIn();
+    try {
+      const config = await getAuthConfig();
+      if (config?.googleClientId) {
+        googleClientId = config.googleClientId;
+        initGoogleSignIn();
+      }
+    } catch (e) {
+      console.warn('Auth config load failed:', e);
     }
   });
 
