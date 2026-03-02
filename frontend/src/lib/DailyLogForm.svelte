@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { getTodayLog, getLogByDate, saveLog, getCurrentDay, getSettings, getPhotoUrl, getGoalPhotoUrl } from '../lib/api.js';
+  import { getTodayLog, getLogByDate, saveLog, getCurrentDay, getSettings, getPhotoUrl, getGoalPhotoUrl, getFitbitStatus, getFitbitDailyMetrics } from '../lib/api.js';
   import DayCounter from './DayCounter.svelte';
   import PhotoUpload from './PhotoUpload.svelte';
   import MetricInput from './MetricInput.svelte';
@@ -9,6 +9,7 @@
   import WorkoutExercises from './WorkoutExercises.svelte';
   import GraphView from './GraphView.svelte';
   import FoodTracker from './FoodTracker.svelte';
+  import FitbitDailyMetrics from './FitbitDailyMetrics.svelte';
 
   export let mobileView = undefined;
   $: isMobile = mobileView != null;
@@ -24,15 +25,15 @@
   let dayNumber = 1;
   let totalDays = 84;
   let startDate = '';
-  let selectedDate = new Date().toISOString().split('T')[0];
-  
+
+  function getTodayLocal() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  let selectedDate = getTodayLocal();
+
   // Check if selected date is today
-  $: isToday = (() => {
-    if (!selectedDate) return false;
-    const today = new Date();
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-    return selectedDate === todayStr;
-  })();
+  $: isToday = selectedDate ? selectedDate === getTodayLocal() : false;
   
   let photoFile = null;
   let currentPhotoUrl = null;
@@ -109,6 +110,8 @@
   let sleepScore = '';
   let stravaActivities = []; // Array of { id, link, name, distance, time, type }
   let steps = '';
+  let fitbitConnected = false;
+  let fitbitSteps = null; // Fitbit steps for header (fetched when connected)
   
   // Copy to functionality
   let showCopyModal = false;
@@ -122,7 +125,7 @@
   async function loadSettings() {
     try {
       const settings = await getSettings();
-      startDate = settings.start_date || new Date().toISOString().split('T')[0];
+      startDate = settings.start_date || getTodayLocal();
       totalDays = settings.total_days || 84;
       
       // Load goal photo URL if available
@@ -138,7 +141,7 @@
   function getDateFromDayNumber(dayNum) {
     if (!startDate) {
       console.warn('startDate not loaded yet');
-      return new Date().toISOString().split('T')[0];
+      return getTodayLocal();
     }
     // Parse as local date to avoid timezone issues
     const startParts = startDate.split('-');
@@ -362,6 +365,22 @@
   // React to date changes (but not on initial mount)
   $: if (selectedDate && !loading && !isInitialMount && selectedDate !== lastLoadedDate) {
     handleDateChange();
+  }
+
+  // Check Fitbit status when stats view is shown (and on mount for header steps)
+  $: if (mobileView === 'stats') {
+    getFitbitStatus().then((d) => { fitbitConnected = d.connected; }).catch(() => { fitbitConnected = false; });
+  }
+
+  // Fetch Fitbit steps for header when connected (use manual steps first, else Fitbit)
+  $: headerSteps = parseFloat(steps) || fitbitSteps || 0;
+
+  $: if (fitbitConnected && selectedDate) {
+    getFitbitDailyMetrics(selectedDate)
+      .then((res) => { if (res?.metrics?.steps != null) fitbitSteps = res.metrics.steps; })
+      .catch(() => { fitbitSteps = null; });
+  } else {
+    fitbitSteps = null;
   }
   
   // Validate date is within range
@@ -599,13 +618,8 @@
     try {
       await loadSettings();
       
-      // Always load today's date on refresh
-      // Get today's date in local timezone (YYYY-MM-DD format)
-      const today = new Date();
-      const year = today.getFullYear();
-      const month = String(today.getMonth() + 1).padStart(2, '0');
-      const day = String(today.getDate()).padStart(2, '0');
-      const todayStr = `${year}-${month}-${day}`;
+      // Always load today's date on refresh (local timezone)
+      const todayStr = getTodayLocal();
       
       // Check if today is within the valid date range
       if (startDate) {
@@ -635,6 +649,8 @@
       lastLoadedDate = '';
       await loadLogForDate(selectedDate);
       lastLoadedDate = selectedDate;
+      const fb = await getFitbitStatus().catch(() => ({ connected: false }));
+      fitbitConnected = fb.connected || false;
       isInitialMount = false;
     } catch (err) {
       console.error('Error in onMount:', err);
@@ -661,7 +677,7 @@
           volume={totalWorkoutVolume}
           calories={totalCalories}
           protein={foodMacros.protein || 0}
-          steps={parseFloat(steps) || 0}
+          steps={headerSteps}
         />
         <div class="card mobile-photo-card">
           <div class="section-with-copy mobile-photo-wrap">
@@ -684,7 +700,7 @@
           volume={totalWorkoutVolume}
           calories={totalCalories}
           protein={foodMacros.protein || 0}
-          steps={parseFloat(steps) || 0}
+          steps={headerSteps}
         />
         <div class="card">
           <div class="form-section">
@@ -719,7 +735,7 @@
           volume={totalWorkoutVolume}
           calories={totalCalories}
           protein={foodMacros.protein || 0}
-          steps={parseFloat(steps) || 0}
+          steps={headerSteps}
         />
         <div class="card">
           <div class="form-section">
@@ -754,7 +770,7 @@
           volume={totalWorkoutVolume}
           calories={totalCalories}
           protein={foodMacros.protein || 0}
-          steps={parseFloat(steps) || 0}
+          steps={headerSteps}
         />
         <div class="card">
           <div class="form-section">
@@ -790,6 +806,11 @@
             <StravaActivities bind:activities={stravaActivities} on:activitiesChanged={(e) => { stravaActivities = e.detail; }} />
           </div>
         </div>
+        <div class="card">
+          <div class="form-section">
+            <FitbitDailyMetrics date={selectedDate} connected={fitbitConnected} />
+          </div>
+        </div>
       </div>
     {/if}
     <div class="status-messages">
@@ -799,7 +820,7 @@
     </div>
   {:else}
     <!-- Desktop layout -->
-    <DayCounter {dayNumber} {totalDays} onPrevious={navigateToPreviousDay} onNext={navigateToNextDay} volume={totalWorkoutVolume} calories={totalCalories} protein={foodMacros.protein || 0} steps={parseFloat(steps) || 0} />
+    <DayCounter {dayNumber} {totalDays} onPrevious={navigateToPreviousDay} onNext={navigateToNextDay} volume={totalWorkoutVolume} calories={totalCalories} protein={foodMacros.protein || 0} steps={headerSteps} />
     
     <div class="form-layout">
         <!-- Left Column: Photo, Date, Body Composition, and Sleep -->

@@ -277,7 +277,15 @@ export async function getFitbitAuthUrl() {
 }
 
 export async function getFitbitStatus() {
-  const response = await fetchWithProfile(`${API_BASE}/fitbit/status`);
+  const response = await fetchWithProfile(`${API_BASE}/fitbit/status`, { cache: 'no-store' });
+  ensureOk(response);
+  return response.json();
+}
+
+export async function getFitbitDailyMetrics(date) {
+  const response = await fetchWithProfile(`${API_BASE}/fitbit/daily-metrics?date=${encodeURIComponent(date)}`, {
+    cache: 'no-store',
+  });
   ensureOk(response);
   return response.json();
 }

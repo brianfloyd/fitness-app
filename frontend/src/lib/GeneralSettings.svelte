@@ -9,7 +9,11 @@
   let success = false;
 
   let totalDays = 84;
-  let startDate = new Date().toISOString().split('T')[0];
+  function getTodayLocal() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  let startDate = getTodayLocal();
   let goalPhotoFile = null;
   let goalPhotoPreview = null;
   let goalPhotoUrl = null;
@@ -26,7 +30,7 @@
       loading = true;
       const settings = await getSettings();
       totalDays = settings.total_days || 84;
-      startDate = settings.start_date || new Date().toISOString().split('T')[0];
+      startDate = settings.start_date || getTodayLocal();
       hasGoalPhoto = settings.has_goal_photo || false;
 
       if (hasGoalPhoto) {
