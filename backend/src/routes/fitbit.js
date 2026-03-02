@@ -415,4 +415,48 @@ router.get('/daily-metrics', requireProfileId, async (req, res) => {
   }
 });
 
+/** Sync weight and body fat to Fitbit when user saves daily log. Call after successful save; errors are logged, not thrown. */
+export async function syncBodyToFitbit(profileId, date, weight, fatPercent) {
+  const w = weight != null && weight !== '' ? parseFloat(weight) : null;
+  const f = fatPercent != null && fatPercent !== '' ? parseFloat(fatPercent) : null;
+  if ((w == null || isNaN(w)) && (f == null || isNaN(f))) return;
+
+  try {
+    const accessToken = await getValidAccessToken(profileId);
+    if (!accessToken) return;
+
+    const fitbitDate = (date || '').includes('/') ? date.replace(/\//g, '-') : (date || '');
+    if (!fitbitDate) return;
+
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Length': '0',
+    };
+
+    if (w != null && !isNaN(w) && w > 0) {
+      const weightRes = await fetch(
+        `https://api.fitbit.com/1/user/-/body/log/weight.json?weight=${encodeURIComponent(w)}&date=${fitbitDate}`,
+        { method: 'POST', headers }
+      );
+      if (!weightRes.ok) {
+        const errText = await weightRes.text();
+        console.warn('[fitbit] Weight sync failed:', weightRes.status, errText?.slice(0, 100));
+      }
+    }
+
+    if (f != null && !isNaN(f) && f >= 0 && f <= 100) {
+      const fatRes = await fetch(
+        `https://api.fitbit.com/1/user/-/body/log/fat.json?fat=${encodeURIComponent(f)}&date=${fitbitDate}`,
+        { method: 'POST', headers }
+      );
+      if (!fatRes.ok) {
+        const errText = await fatRes.text();
+        console.warn('[fitbit] Body fat sync failed:', fatRes.status, errText?.slice(0, 100));
+      }
+    }
+  } catch (err) {
+    console.warn('[fitbit] syncBodyToFitbit error:', err.message);
+  }
+}
+
 export default router;

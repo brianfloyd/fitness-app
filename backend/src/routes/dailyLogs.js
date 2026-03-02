@@ -1,6 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import pool from '../db/connection.js';
+import { syncBodyToFitbit } from './fitbit.js';
 
 const router = express.Router();
 
@@ -273,10 +274,11 @@ router.post('/', upload.single('photo'), async (req, res) => {
       [profileId]
     );
     const totalDays = settingsResult.rows[0]?.total_days || 84;
+    const row = result.rows[0];
     if (process.env.NODE_ENV === 'production') {
-      const row = result.rows[0];
       console.log('[logs] POST saved', { profileId, date: row?.date, weight: row?.weight, fat_percent: row?.fat_percent });
     }
+    syncBodyToFitbit(profileId, row?.date, row?.weight, row?.fat_percent).catch(() => {});
     res.json({
       ...result.rows[0],
       total_days: totalDays,
@@ -350,9 +352,10 @@ router.put('/:date', upload.single('photo'), async (req, res) => {
       [profileId]
     );
     const totalDays = settingsResult.rows[0]?.total_days || 84;
-    
+    const row = result.rows[0];
+    syncBodyToFitbit(profileId, row?.date, row?.weight, row?.fat_percent).catch(() => {});
     res.json({
-      ...result.rows[0],
+      ...row,
       total_days: totalDays,
     });
   } catch (error) {

@@ -30,6 +30,14 @@
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
+  /** Format YYYY-MM-DD as local date string. Avoids new Date(str) parsing as UTC which shifts day in western timezones. */
+  function formatDateLocal(dateStr) {
+    if (!dateStr) return '';
+    const parts = String(dateStr).split('-').map(Number);
+    if (parts.length < 3 || parts.some(isNaN)) return '';
+    const d = new Date(parts[0], parts[1] - 1, parts[2]);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
   let selectedDate = getTodayLocal();
 
   // Check if selected date is today
@@ -671,7 +679,7 @@
         <DayCounter
           {dayNumber}
           {totalDays}
-          displayDate={selectedDate ? new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}
+          displayDate={formatDateLocal(selectedDate)}
           onPrevious={navigateToPreviousDay}
           onNext={navigateToNextDay}
           volume={totalWorkoutVolume}
@@ -694,7 +702,7 @@
         <DayCounter
           {dayNumber}
           {totalDays}
-          displayDate={selectedDate ? new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}
+          displayDate={formatDateLocal(selectedDate)}
           onPrevious={navigateToPreviousDay}
           onNext={navigateToNextDay}
           volume={totalWorkoutVolume}
@@ -729,7 +737,7 @@
         <DayCounter
           {dayNumber}
           {totalDays}
-          displayDate={selectedDate ? new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}
+          displayDate={formatDateLocal(selectedDate)}
           onPrevious={navigateToPreviousDay}
           onNext={navigateToNextDay}
           volume={totalWorkoutVolume}
@@ -764,7 +772,7 @@
         <DayCounter
           {dayNumber}
           {totalDays}
-          displayDate={selectedDate ? new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}
+          displayDate={formatDateLocal(selectedDate)}
           onPrevious={navigateToPreviousDay}
           onNext={navigateToNextDay}
           volume={totalWorkoutVolume}
@@ -880,7 +888,7 @@
                 </div>
                 <div class="metric-input">
                   <label>Start Date</label>
-                  <input type="text" value={new Date(startDate).toLocaleDateString()} readonly />
+                  <input type="text" value={formatDateLocal(startDate)} readonly />
                 </div>
               </div>
             </div>
