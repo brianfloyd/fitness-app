@@ -262,23 +262,44 @@ router.post('/custom', async (req, res) => {
     const bc = (barcode || '').trim() || null;
     const isUniversal = universal === true && bc && bc.length >= 8;
 
-    const result = await pool.query(
-      `INSERT INTO foods (source, profile_id, name, brand, barcode, serving_size, serving_unit, calories, protein, fat, carbs)
-       VALUES ('custom', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-       RETURNING id, name, brand, barcode, serving_size, serving_unit, calories, protein, fat, carbs, created_at`,
-      [
-        isUniversal ? null : profileId,
-        n,
-        (brand || '').trim() || null,
-        bc,
-        ss,
-        su,
-        cal,
-        protein != null && !isNaN(parseFloat(protein)) ? parseFloat(protein) : null,
-        fat != null && !isNaN(parseFloat(fat)) ? parseFloat(fat) : null,
-        carbs != null && !isNaN(parseFloat(carbs)) ? parseFloat(carbs) : null,
-      ]
-    );
+    const params = [
+      isUniversal ? null : profileId,
+      n,
+      (brand || '').trim() || null,
+      bc,
+      ss,
+      su,
+      cal,
+      protein != null && !isNaN(parseFloat(protein)) ? parseFloat(protein) : null,
+      fat != null && !isNaN(parseFloat(fat)) ? parseFloat(fat) : null,
+      carbs != null && !isNaN(parseFloat(carbs)) ? parseFloat(carbs) : null,
+    ];
+
+    let result;
+    try {
+      result = await pool.query(
+        `INSERT INTO foods (source, profile_id, name, brand, barcode, serving_size, serving_unit, calories, protein, fat, carbs)
+         VALUES ('custom', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         RETURNING id, name, brand, barcode, serving_size, serving_unit, calories, protein, fat, carbs, created_at`,
+        params
+      );
+    } catch (insertErr) {
+      // Duplicate primary key: sequence out of sync; resync and retry once so "create my version" works
+      if (insertErr.code === '23505' && insertErr.constraint === 'foods_pkey') {
+        await pool.query(
+          `SELECT setval(pg_get_serial_sequence('foods', 'id'), COALESCE((SELECT MAX(id) FROM foods), 1))`
+        );
+        result = await pool.query(
+          `INSERT INTO foods (source, profile_id, name, brand, barcode, serving_size, serving_unit, calories, protein, fat, carbs)
+           VALUES ('custom', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+           RETURNING id, name, brand, barcode, serving_size, serving_unit, calories, protein, fat, carbs, created_at`,
+          params
+        );
+      } else {
+        throw insertErr;
+      }
+    }
+
     const row = result.rows[0];
     res.status(201).json({
       id: row.id,

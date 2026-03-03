@@ -17,6 +17,7 @@ const MIGRATIONS = [
   { name: 'add_fitbit_tokens.sql', path: join(root, 'database/migrations/add_fitbit_tokens.sql') },
   { name: 'add_oauth_email_to_profiles.sql', path: join(root, 'database/migrations/add_oauth_email_to_profiles.sql') },
   { name: 'add_recipes_tables.sql', path: join(root, 'database/migrations/add_recipes_tables.sql') },
+  { name: 'fix_foods_id_sequence.sql', path: join(root, 'database/migrations/fix_foods_id_sequence.sql') },
 ];
 
 /**
