@@ -8,7 +8,7 @@
 
 ## 1. Overview
 
-The Fitness App integrates with USDA FoodData Central API to search for foods, calculate macros, and track nutrition. Users can search foods, adjust portions, and quickly add common/recent foods.
+The Fitness App integrates with USDA FoodData Central API to search for foods, calculate macros, and track nutrition. Users can search foods, adjust portions, and quickly add common/recent foods. **Recipes** let users build reusable food aggregates from individual foods and log them by serving; a **portion helper** suggests how many servings to divide a recipe into for a target protein per serving.
 
 **Main Component:** `frontend/src/lib/FoodTracker.svelte`
 
@@ -271,7 +271,33 @@ totalMacros = foods.reduce((acc, food) => ({
 
 ---
 
-## 8. References
+## 8. Recipes and Portion Helper
+
+### **8.1 Recipes**
+
+**Purpose:** Reusable food aggregates built from individual foods (custom or USDA). Stored per profile.
+
+**Components:**
+- **RecipeEditor.svelte** – Modal with Details (name, brand, servings), Ingredients (search/add foods, amount + unit per row), and Portion helper. Save/Cancel.
+- **FoodTracker** – "Recipes" tab: list/search recipes, "New recipe" opens editor, recipe cards add one serving to the day.
+
+**API:** `GET /api/recipes`, `GET /api/recipes/:id`, `POST /api/recipes` (create/update), `DELETE /api/recipes/:id`. See `backend/src/routes/recipes.js` and `frontend/src/lib/api.js` (getRecipes, getRecipeById, createOrUpdateRecipe, deleteRecipe). **Database:** Run the migration `database/migrations/add_recipes_tables.sql` on your PostgreSQL database; if you see "relation 'recipes' does not exist", the migration has not been applied.
+
+**Logging:** When a recipe is added to a day, the app builds a synthetic food entry with per-serving macros (totals / servings), `recipeId`, and `customFood` (1 serving). It is stored in `daily_logs.foods` like a custom food. Added Foods show a "Recipe" badge for these entries.
+
+### **8.2 Portion Helper**
+
+**Location:** Inside RecipeEditor, "Portion helper" tab.
+
+**Input:** Target protein per serving (g).
+
+**Logic:** Total protein = sum of ingredient macros; suggested servings = round(totalProtein / targetProtein); optional mass per portion if total mass is available.
+
+**Apply:** User can apply the suggested servings back to the recipe.
+
+---
+
+## 9. References
 
 - **Daily Log Flow:** `10-01-daily-log-flow.md`
 - **Backend Routes:** `20-03-backend-services.md`
@@ -280,13 +306,14 @@ totalMacros = foods.reduce((acc, food) => ({
 
 ---
 
-## 9. Maintenance
+## 10. Maintenance
 
 This document should be updated when:
 - USDA API integration changes
 - Food data structure changes
 - New food features are added
 - Portion adjustment logic changes
+- Recipe or portion-helper behaviour changes
 
 ---
 

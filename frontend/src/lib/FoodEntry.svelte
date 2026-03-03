@@ -16,7 +16,7 @@
   let lastSyncedUnit = null;
   let expanded = false;
 
-  $: isCustom = food?.customFoodId != null;
+  $: isCustom = food?.customFoodId != null || food?.recipeId != null;
 
   onDestroy(() => {
     if (updateTimeout) clearTimeout(updateTimeout);
@@ -72,6 +72,7 @@
     const payload = { entryId };
     if (food.customFoodId != null) payload.customFoodId = food.customFoodId;
     if (food.fdcId != null) payload.fdcId = food.fdcId;
+    if (food.recipeId != null) payload.recipeId = food.recipeId;
     dispatch('remove', payload);
   }
 
@@ -94,6 +95,7 @@
     <div class="food-result-info">
       <div class="food-result-header">
         <span class="food-result-name" title={food.name}>{food.name}</span>
+        {#if food.recipeId != null}<span class="food-result-badge recipe-badge">Recipe</span>{/if}
         <span class="food-result-badge logged-badge">Logged</span>
       </div>
       {#if food.brand}
@@ -231,6 +233,17 @@
     flex-shrink: 0;
     background-color: rgba(16, 185, 129, 0.2);
     color: #10b981;
+  }
+
+  .food-result-badge.recipe-badge {
+    padding: 2px 6px;
+    border-radius: var(--border-radius-sm);
+    font-size: 0.65rem;
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
+    background-color: rgba(139, 92, 246, 0.2);
+    color: #a78bfa;
   }
 
   .remove-food-btn {

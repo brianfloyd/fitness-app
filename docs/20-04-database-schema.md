@@ -138,6 +138,77 @@ CREATE TABLE IF NOT EXISTS daily_logs (
 
 ---
 
+### **2.4 recipes Table**
+
+**Purpose:** Stores reusable food aggregates (recipes) composed of multiple ingredients. Recipes are scoped per profile.
+
+**Schema (migration `add_recipes_tables.sql`):**
+```sql
+CREATE TABLE IF NOT EXISTS recipes (
+    id SERIAL PRIMARY KEY,
+    profile_id INTEGER NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    brand VARCHAR(255) NULL,
+    servings NUMERIC(10, 2) NOT NULL CHECK (servings > 0),
+    total_calories NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    total_protein NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    total_fat NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    total_carbs NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+**Fields:**
+- `id` - Primary key (auto-increment)
+- `profile_id` - FK to `profiles.id`, owner of the recipe
+- `name` - Recipe name (e.g., "Chicken Burrito")
+- `brand` - Optional brand or source label
+- `servings` - Number of servings the full recipe yields
+- `total_calories` - Total calories for the entire prepared recipe
+- `total_protein` - Total protein (g) for the entire recipe
+- `total_fat` - Total fat (g) for the entire recipe
+- `total_carbs` - Total carbs (g) for the entire recipe
+- `created_at` / `updated_at` - Timestamps
+
+**Indexes:**
+- `idx_recipes_profile_id` - Index on `profile_id`
+- `idx_recipes_name_lower` - Index on `LOWER(name)` for case-insensitive search
+
+---
+
+### **2.5 recipe_ingredients Table**
+
+**Purpose:** Links recipes to their component foods and stores per-ingredient amounts/units. Also stores a JSON snapshot for stability if source foods change.
+
+**Schema (migration `add_recipes_tables.sql`):**
+```sql
+CREATE TABLE IF NOT EXISTS recipe_ingredients (
+    id SERIAL PRIMARY KEY,
+    recipe_id INTEGER NOT NULL,
+    food_id INTEGER NULL,
+    amount NUMERIC(12, 4) NOT NULL,
+    unit VARCHAR(32) NOT NULL,
+    ingredient_json JSONB NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+**Fields:**
+- `id` - Primary key (auto-increment)
+- `recipe_id` - FK to `recipes.id`
+- `food_id` - Optional FK to `foods.id` when ingredient comes from foods cache/custom foods
+- `amount` - Numeric amount of the ingredient (e.g., `58`)
+- `unit` - Unit label (e.g., `oz`, `g`, `serving`)
+- `ingredient_json` - JSON snapshot of ingredient metadata and macros at time of recipe save
+- `created_at` / `updated_at` - Timestamps
+
+**Indexes:**
+- `idx_recipe_ingredients_recipe_id` - Index on `recipe_id`
+
+---
+
 ## 3. Data Types
 
 ### **3.1 BYTEA (Binary Data)**

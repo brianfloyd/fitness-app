@@ -142,20 +142,35 @@ ADD COLUMN goal_photo BYTEA;
 
 ## 5. Migration Execution
 
-### **5.1 Manual Execution**
+### **5.1 On Server Startup (Local and Railway)**
+
+**File:** `backend/src/runMigrations.js`
+
+**Behavior:** The backend runs all migrations automatically before `app.listen()`. Same behavior locally and on Railway: no separate migrate step or custom start command is required. If the database is unreachable, startup fails (exit 1). Individual migration failures (e.g. object already exists) are logged and the process continues so restarts and redeploys remain safe.
+
+**Single source of truth:** The migration list lives in `runMigrations.js`. The CLI `npm run migrate-all` (run-all-migrations.js) uses the same `runMigrations()` so manual runs stay in sync.
+
+---
+
+### **5.2 Manual Execution (CLI)**
+
+**Command:**
+```bash
+npm run migrate-all
+```
+
+Runs the same migrations as server startup. Use for one-off sync or verification.
+
+---
+
+### **5.3 Per-File (psql)**
 
 **Command:**
 ```bash
 psql -U postgres -d fitness_db -f database/migrations/migration_name.sql
 ```
 
----
-
-### **5.2 Programmatic Execution**
-
-**File:** `backend/src/run-migration.js` (if exists)
-
-**Purpose:** Run migrations programmatically from Node.js
+Use when you need to run a single migration file outside the app.
 
 ---
 

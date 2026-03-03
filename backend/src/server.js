@@ -4,12 +4,14 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync } from 'fs';
 import dotenv from 'dotenv';
+import { runMigrations } from './runMigrations.js';
 import { requireProfileId } from './middleware/requireProfileId.js';
 import dailyLogsRoutes from './routes/dailyLogs.js';
 import settingsRoutes from './routes/settings.js';
 import stravaRoutes from './routes/strava.js';
 import fitbitRoutes from './routes/fitbit.js';
 import foodsRoutes from './routes/foods.js';
+import recipesRoutes from './routes/recipes.js';
 import profilesRoutes from './routes/profiles.js';
 import authRoutes from './routes/auth.js';
 
@@ -69,6 +71,7 @@ app.use((req, res, next) => {
 app.use('/api/strava', requireProfileId, stravaRoutes);
 app.use('/api/fitbit', fitbitRoutes);
 app.use('/api/foods', requireProfileId, foodsRoutes);
+app.use('/api/recipes', requireProfileId, recipesRoutes);
 app.use('/api/profiles', profilesRoutes);
 app.use('/api/auth', authRoutes);
 
@@ -85,7 +88,14 @@ if (process.env.NODE_ENV === 'production' && existsSync(frontendDist)) {
   app.get('*', (req, res) => res.sendFile(path.join(frontendDist, 'index.html')));
 }
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// Run migrations then start server (local and Railway: migrations run on every deploy/restart)
+runMigrations()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  })
+  .catch((e) => {
+    console.error('Migrations failed, server not started:', e);
+    process.exit(1);
+  });

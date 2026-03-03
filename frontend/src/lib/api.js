@@ -213,6 +213,40 @@ export async function getCustomFood(id) {
   return response.json();
 }
 
+// Recipes API
+export async function getRecipes() {
+  const response = await fetchWithProfile(`${API_BASE}/recipes`);
+  ensureOk(response);
+  return response.json();
+}
+
+export async function getRecipeById(id) {
+  const response = await fetchWithProfile(`${API_BASE}/recipes/${id}`);
+  ensureOk(response);
+  return response.json();
+}
+
+export async function createOrUpdateRecipe(data) {
+  const response = await fetchWithProfile(`${API_BASE}/recipes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to save recipe');
+  }
+  return response.json();
+}
+
+export async function deleteRecipe(id) {
+  const response = await fetchWithProfile(`${API_BASE}/recipes/${id}`, { method: 'DELETE' });
+  if (response.status !== 204 && !response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to delete recipe');
+  }
+}
+
 // Profiles API
 export async function getProfiles() {
   const response = await fetch(`${API_BASE}/profiles`);

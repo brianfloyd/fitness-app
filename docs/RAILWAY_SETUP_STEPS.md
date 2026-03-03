@@ -20,17 +20,17 @@ Complete these steps in the Railway dashboard to finish deployment.
 2. Go to **Settings** → **Networking**
 3. Click **Generate Domain** (creates `xxx.up.railway.app`)
 
-## 3. Enable GitHub Auto-Deploy (Optional)
+## 3. GitHub Actions Auto-Deploy (Recommended)
 
 To trigger deploys on `git push origin main`:
 
-1. Select **fitness-app** service → **Settings**
-2. Under **Source**, connect **GitHub** and select **brianfloyd/fitness-app**
-3. Set branch to `main` and enable **Deploy on Push**
+1. Create a **Project Token** in Railway: Project **fitness-app** → **Settings** → **Tokens** → **Create Token**
+2. Add the token to GitHub: Repo **brianfloyd/fitness-app** → **Settings** → **Secrets and variables** → **Actions** → **New repository secret** → Name: `RAILWAY_TOKEN`, Value: (paste token)
+3. The workflow `.github/workflows/deploy-railway.yml` runs `railway up` on every push to `main`
 
 ## 4. Future Deploys
 
-- **CLI:** `railway up --service fitness-app`
-- **GitHub:** After connecting in step 3, `git push origin main` triggers deploy
+- **Auto:** Push to `main` triggers GitHub Action → `railway up`
+- **Manual CLI:** `railway up --service fitness-app`
 
-Migrations run automatically on each deploy (startCommand includes `npm run migrate-all`).
+**Migrations:** The backend runs all migrations automatically on every startup (local and Railway). No separate migrate step or custom start command is required. Ensure the app service has `DATABASE_URL` (Postgres reference) so migrations can run before the server listens.

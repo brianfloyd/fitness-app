@@ -101,6 +101,7 @@ The Fitness App allows users to log exercises organized by muscle groups, track 
   sets: [
     { id: "set-id", weight: 150, reps: 10 }
   ],
+  direction: "up" | "down" | null,  // Optional: up = try heavier next time, down = struggled last time
   completed: false
 }
 ```
@@ -117,6 +118,7 @@ The Fitness App allows users to log exercises organized by muscle groups, track 
 - Add set button
 - Remove set (per set)
 - Edit weight/reps inline
+- Auto-fill: on blur, weight in set 1 fills empty weights in other sets; reps in set 1 fills empty reps in other sets
 
 **Validation:**
 - Weight: Positive number
@@ -124,7 +126,20 @@ The Fitness App allows users to log exercises organized by muscle groups, track 
 
 ---
 
-### **4.3 Exercise Completion**
+### **4.3 Direction Indicator (Optional)**
+
+**UI:** Button in top-right of exercise card cycles: none → up (green) → down (red) → none.
+
+**Meaning:**
+- **Up (green):** Last session felt good – try increasing weight next time
+- **Down (red):** Struggled last time – consider lighter weight
+- **None:** Use last weights as-is (default)
+
+**Storage:** Stored per exercise in workout JSON. When adding from history, last session’s direction is shown.
+
+---
+
+### **4.4 Exercise Completion**
 
 **Checkbox:** "Complete" toggle
 **Behavior:**
@@ -206,6 +221,7 @@ totalVolume = exercises
       { "id": "set-1", "weight": 150, "reps": 10 },
       { "id": "set-2", "weight": 150, "reps": 10 }
     ],
+    "direction": "up",
     "completed": true
   }
 ]

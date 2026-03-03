@@ -8,6 +8,8 @@
   export let calories = 0;
   export let protein = 0;   // grams
   export let steps = 0;
+  export let zoneMinutes = 0;
+  export let caloriesExpended = null; // Fitbit calories out; only shown when calories (consumed) > 0
 
   function compactNum(n) {
     const num = Number(n) || 0;
@@ -16,10 +18,17 @@
   }
 
   $: volStr = volume > 0 ? compactNum(volume) : '';
-  $: calStr = calories > 0 ? compactNum(calories) : '';
+  $: calStr = (() => {
+    const consumed = Number(calories) || 0;
+    if (consumed <= 0) return '';
+    const exp = caloriesExpended != null ? Math.round(Number(caloriesExpended)) : null;
+    if (exp != null) return `${Math.round(consumed)}/${exp}`;
+    return compactNum(consumed) + ' cal';
+  })();
   $: proStr = protein > 0 ? compactNum(protein) : '';
   $: stpStr = steps > 0 ? compactNum(steps) : '';
-  $: hasStats = volStr || calStr || proStr || stpStr;
+  $: zmStr = zoneMinutes > 0 ? String(zoneMinutes) + ' zm' : '';
+  $: hasStats = volStr || calStr || proStr || stpStr || zmStr;
 
   $: progress = (dayNumber / totalDays) * 100;
   $: percentage = progress.toFixed(1);
@@ -77,8 +86,9 @@
   {#if hasStats}
     <div class="day-stats">
       {#if volStr}<span class="stat">vol {volStr}</span>{/if}
-      {#if calStr}<span class="stat">{calStr} cal</span>{/if}
+      {#if calStr}<span class="stat">{calStr}</span>{/if}
       {#if proStr}<span class="stat">{proStr}g P</span>{/if}
+      {#if zmStr}<span class="stat">{zmStr}</span>{/if}
       {#if stpStr}<span class="stat">{stpStr} stp</span>{/if}
     </div>
   {/if}

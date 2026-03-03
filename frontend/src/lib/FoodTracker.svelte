@@ -3,7 +3,8 @@
   import FoodSearch from './FoodSearch.svelte';
   import FoodEntry from './FoodEntry.svelte';
   import CommonFoods from './CommonFoods.svelte';
-  import { getFoodDetails } from './api.js';
+  import RecipeEditor from './RecipeEditor.svelte';
+  import { getFoodDetails, getRecipes, getRecipeById, deleteRecipe } from './api.js';
   import { getCommonFoods, trackFoodUsage } from './utils/foodStorage.js';
   import { calculateMacros, calculateMacrosForCustom } from './utils/foodConversions.js';
   
@@ -13,10 +14,29 @@
   
   let commonFoods = [];
   let totalMacros = { protein: 0, fat: 0, carbs: 0, calories: 0 };
+  let foodTab = 'foods'; // 'foods' | 'recipes'
+  let showRecipeEditor = false;
+  let editingRecipe = null;
+  let recipesList = [];
+  let recipeSearchQuery = '';
+  
+  $: filteredRecipes = recipeSearchQuery.trim().length >= 1
+    ? recipesList.filter((r) => r.name.toLowerCase().includes(recipeSearchQuery.toLowerCase()))
+    : recipesList;
+  
+  async function loadRecipes() {
+    try {
+      const res = await getRecipes();
+      recipesList = res.recipes || [];
+    } catch (e) {
+      recipesList = [];
+    }
+  }
   
   // Load common foods on mount
   onMount(() => {
     commonFoods = getCommonFoods();
+    loadRecipes();
   });
   
   // Reload common foods whenever foods array reference changes (new date/page loaded)
@@ -151,8 +171,10 @@
     const updatedFood = event.detail;
     if (!updatedFood) return;
     const match = (f) =>
+      (updatedFood.id && f?.id === updatedFood.id) ||
       (updatedFood.customFoodId != null && f?.customFoodId === updatedFood.customFoodId) ||
-      (updatedFood.fdcId != null && f?.fdcId === updatedFood.fdcId);
+      (updatedFood.fdcId != null && f?.fdcId === updatedFood.fdcId) ||
+      (updatedFood.recipeId != null && f?.recipeId === updatedFood.recipeId && f?.id === updatedFood.id);
 
     const newFoods = foods.map(f => {
       if (match(f)) {
@@ -175,11 +197,14 @@
   }
 
   function handleFoodRemove(event) {
-    const { entryId, fdcId, customFoodId } = event.detail || {};
+    const { entryId, fdcId, customFoodId, recipeId } = event.detail || {};
     const index = foods.findIndex((f, i) => {
       if (!f) return false;
-      const id = f.id || (f.customFoodId != null ? `custom-${f.customFoodId}` : String(f.fdcId)) || `food-${i}`;
-      return entryId ? id === entryId : (customFoodId != null ? f.customFoodId === customFoodId : f.fdcId === fdcId);
+      const id = f.id || (f.customFoodId != null ? `custom-${f.customFoodId}` : f.recipeId != null ? `recipe-${f.recipeId}` : String(f.fdcId)) || `food-${i}`;
+      if (entryId) return id === entryId;
+      if (recipeId != null && f.recipeId === recipeId) return true;
+      if (customFoodId != null) return f.customFoodId === customFoodId;
+      return f.fdcId === fdcId;
     });
     if (index >= 0) {
       const newFoods = foods.filter((_, i) => i !== index);
@@ -191,16 +216,132 @@
   function handleCommonFoodsUpdate(event) {
     commonFoods = event.detail;
   }
+  
+  function addRecipeToDay(recipe) {
+    const serv = recipe.servings ?? 1;
+    const perCal = (recipe.total_calories ?? 0) / serv;
+    const perP = (recipe.total_protein ?? 0) / serv;
+    const perF = (recipe.total_fat ?? 0) / serv;
+    const perC = (recipe.total_carbs ?? 0) / serv;
+    const customFood = {
+      serving_size: 1,
+      serving_unit: 'serving',
+      calories: perCal,
+      protein: perP,
+      fat: perF,
+      carbs: perC,
+    };
+    const macros = calculateMacrosForCustom(customFood, 1, 'serving');
+    const foodEntry = {
+      id: `recipe-${recipe.id}-${Date.now()}-${Math.random()}`,
+      recipeId: recipe.id,
+      name: recipe.name,
+      brand: recipe.brand ?? null,
+      amount: 1,
+      unit: 'serving',
+      customFood,
+      protein: macros.protein,
+      fat: macros.fat,
+      carbs: macros.carbs,
+      calories: macros.calories,
+    };
+    const newFoods = [...foods, foodEntry];
+    foods = newFoods;
+    dispatch('change', newFoods);
+  }
+  
+  function openNewRecipe() {
+    editingRecipe = null;
+    recipeLoadError = null;
+    showRecipeEditor = true;
+  }
+  
+  let recipeLoadError = null;
+  async function openEditRecipe(recipe) {
+    recipeLoadError = null;
+    if (!recipe?.id) return;
+    try {
+      editingRecipe = await getRecipeById(recipe.id);
+      showRecipeEditor = true;
+    } catch (e) {
+      console.error('Failed to load recipe:', e);
+      recipeLoadError = e.message || 'Failed to load recipe';
+    }
+  }
+  
+  function handleRecipeSaved() {
+    loadRecipes();
+  }
+  
+  function handleRecipeEditorClose() {
+    showRecipeEditor = false;
+    editingRecipe = null;
+    recipeLoadError = null;
+  }
+
+  function handleRecipeDeleted() {
+    loadRecipes();
+  }
+
+  async function deleteRecipeFromCard(r, event) {
+    event?.stopPropagation?.();
+    if (!r?.id) return;
+    if (!confirm(`Delete "${r.name}"? This cannot be undone.`)) return;
+    try {
+      await deleteRecipe(r.id);
+      loadRecipes();
+    } catch (e) {
+      console.error('Failed to delete recipe:', e);
+      alert(e.message || 'Failed to delete recipe');
+    }
+  }
 </script>
 
 <div class="food-tracker">
-  <FoodSearch on:foodSelected={handleFoodSelected} />
+  <div class="food-tracker-tabs">
+    <button type="button" class="tab-btn" class:active={foodTab === 'foods'} on:click={() => foodTab = 'foods'}>Foods</button>
+    <button type="button" class="tab-btn" class:active={foodTab === 'recipes'} on:click={() => foodTab = 'recipes'}>Recipes</button>
+  </div>
   
-  <CommonFoods
-    {commonFoods}
-    on:update={handleCommonFoodsUpdate}
-    on:foodAdded={handleFoodAdded}
-  />
+  {#if foodTab === 'foods'}
+    <FoodSearch on:foodSelected={handleFoodSelected} />
+      <CommonFoods
+      {commonFoods}
+      on:update={handleCommonFoodsUpdate}
+      on:foodAdded={handleFoodAdded}
+    />
+  {:else}
+    <div class="recipe-picker">
+      <div class="recipe-picker-actions">
+        <button type="button" class="new-recipe-btn" on:click={openNewRecipe}>New recipe</button>
+        <input type="text" class="recipe-search-input" placeholder="Search recipes by name..." bind:value={recipeSearchQuery} />
+      </div>
+      {#if recipeLoadError}
+        <p class="recipe-load-error">{recipeLoadError}</p>
+      {/if}
+      <div class="recipe-cards">
+        {#each filteredRecipes as r}
+          {@const perCal = r.servings > 0 ? (r.total_calories / r.servings) : 0}
+          {@const perP = r.servings > 0 ? (r.total_protein / r.servings) : 0}
+          <div class="recipe-card" role="button" tabindex="0" on:click={() => addRecipeToDay(r)} on:keydown={(e) => e.key === 'Enter' && addRecipeToDay(r)}>
+            <div class="recipe-card-name">{r.name}</div>
+            {#if r.brand}<div class="recipe-card-brand">{r.brand}</div>{/if}
+            <div class="recipe-card-macros">Per serving: {Math.round(perCal)} cal · P {Math.round(perP * 10) / 10}g</div>
+            <div class="recipe-card-buttons">
+              <button type="button" class="recipe-card-add-btn" on:click|stopPropagation={() => addRecipeToDay(r)}>+</button>
+              <button type="button" class="recipe-card-edit-btn" on:click|stopPropagation={() => openEditRecipe(r)} title="Edit recipe">Edit</button>
+              <button type="button" class="recipe-card-delete-btn" on:click|stopPropagation={(e) => deleteRecipeFromCard(r, e)} title="Delete recipe">Delete</button>
+            </div>
+          </div>
+        {/each}
+      </div>
+      {#if filteredRecipes.length === 0 && (recipeSearchQuery.trim() || recipesList.length === 0)}
+        <p class="recipe-picker-empty">No recipes yet. Create one with &quot;New recipe&quot;.</p>
+      {:else if filteredRecipes.length === 0}
+        <p class="recipe-picker-empty">No recipes match &quot;{recipeSearchQuery}&quot;.</p>
+      {/if}
+    </div>
+  {/if}
   
   {#if foods.length > 0}
     <div class="foods-list">
@@ -227,6 +368,14 @@
     </div>
   {/if}
 </div>
+
+<RecipeEditor
+  visible={showRecipeEditor}
+  recipe={editingRecipe}
+  on:saved={handleRecipeSaved}
+  on:deleted={handleRecipeDeleted}
+  on:close={handleRecipeEditorClose}
+/>
 
 <style>
   .food-tracker {
@@ -280,5 +429,148 @@
   
   .empty-state p {
     margin: 0;
+  }
+  
+  .food-tracker-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: var(--spacing-md);
+  }
+  .tab-btn {
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--border-radius-sm);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.875rem;
+  }
+  .tab-btn.active {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+  }
+  .recipe-picker {
+    margin-bottom: var(--spacing-md);
+  }
+  .recipe-picker-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+    align-items: center;
+    margin-bottom: var(--spacing-md);
+  }
+  .new-recipe-btn {
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: var(--border-radius-sm);
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .recipe-load-error {
+    margin: 0 0 var(--spacing-sm);
+    padding: var(--spacing-sm);
+    background: rgba(239, 68, 68, 0.15);
+    color: #fca5a5;
+    border-radius: var(--border-radius-sm);
+    font-size: 0.875rem;
+  }
+  .recipe-search-input {
+    flex: 1;
+    min-width: 160px;
+    padding: var(--spacing-sm);
+    border: 1px solid var(--border);
+    border-radius: var(--border-radius);
+    background: var(--input-background);
+    color: var(--text-primary);
+    font-size: 1rem;
+  }
+  .recipe-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: var(--spacing-sm);
+  }
+  .recipe-card {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-md);
+    background: var(--surface-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    text-align: left;
+    position: relative;
+  }
+  .recipe-card:hover {
+    border-color: var(--primary-color);
+  }
+  .recipe-card-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    flex: 1;
+    min-width: 0;
+  }
+  .recipe-card-brand {
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    width: 100%;
+  }
+  .recipe-card-macros {
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    width: 100%;
+  }
+  .recipe-card-buttons {
+    position: absolute;
+    top: var(--spacing-sm);
+    right: var(--spacing-sm);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .recipe-card-add-btn {
+    padding: 4px 10px;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: var(--border-radius-sm);
+    font-size: 1rem;
+    cursor: pointer;
+    line-height: 1;
+  }
+  .recipe-card-edit-btn {
+    padding: 2px 8px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    border-radius: var(--border-radius-sm);
+    font-size: 0.75rem;
+    cursor: pointer;
+  }
+  .recipe-card-edit-btn:hover {
+    color: var(--text-primary);
+  }
+  .recipe-card-delete-btn {
+    padding: 2px 8px;
+    background: transparent;
+    border: 1px solid #dc2626;
+    color: #f87171;
+    border-radius: var(--border-radius-sm);
+    font-size: 0.75rem;
+    cursor: pointer;
+  }
+  .recipe-card-delete-btn:hover {
+    background: rgba(220, 38, 38, 0.15);
+    color: #fca5a5;
+  }
+  .recipe-picker-empty {
+    margin: var(--spacing-md) 0;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
   }
 </style>

@@ -18,6 +18,15 @@ function generatePKCE() {
   return { verifier, challenge };
 }
 
+function getRedirectUri() {
+  const base = process.env.FITBIT_REDIRECT_URI;
+  if (!base) return null;
+  const trimmed = base.replace(/\/$/, '');
+  // If already a full callback path (e.g. https://localhost:5173/fitbit-callback for frontend flow), use as-is
+  if (trimmed.includes('/fitbit-callback')) return trimmed;
+  return trimmed + '/api/fitbit/callback';
+}
+
 // GET /api/fitbit/auth-url - returns OAuth URL (requires profileId)
 router.get('/auth-url', requireProfileId, (req, res) => {
   const clientId = process.env.FITBIT_CLIENT_ID;
@@ -32,7 +41,7 @@ router.get('/auth-url', requireProfileId, (req, res) => {
   const state = Buffer.from(JSON.stringify({ profileId: req.profileId, verifier })).toString('base64url');
 
   const baseUrl = process.env.FITBIT_REDIRECT_URI || (req.protocol + '://' + req.get('host'));
-  const redirectUri = baseUrl.replace(/\/$/, '') + '/api/fitbit/callback';
+  const redirectUri = getRedirectUri() || (baseUrl.replace(/\/$/, '') + '/api/fitbit/callback');
 
   const scope = 'activity heartrate profile sleep weight';
   const params = new URLSearchParams({
@@ -48,38 +57,19 @@ router.get('/auth-url', requireProfileId, (req, res) => {
   res.json({ url: `${FITBIT_AUTH_URL}?${params}` });
 });
 
-// GET /api/fitbit/callback - Fitbit redirects here (no requireProfileId - we get profileId from state)
-router.get('/callback', async (req, res) => {
-  const { code, state, error } = req.query;
-  const baseUrl = req.protocol + '://' + req.get('host');
-  const frontendUrl = process.env.FRONTEND_URL || baseUrl.replace(/3001/, '5173').replace(/3000/, '5173');
-
-  if (error) {
-    console.error('[fitbit] OAuth error:', error);
-    return res.redirect(`${frontendUrl}/?fitbit_error=${encodeURIComponent(error)}`);
-  }
-
-  if (!code || !state) {
-    return res.redirect(`${frontendUrl}/?fitbit_error=missing_params`);
-  }
-
+async function exchangeFitbitCode(code, state, redirectUri) {
   let profileId, verifier;
   try {
     const decoded = JSON.parse(Buffer.from(state, 'base64url').toString());
     profileId = decoded.profileId;
     verifier = decoded.verifier;
   } catch (e) {
-    return res.redirect(`${frontendUrl}/?fitbit_error=invalid_state`);
+    return { error: 'invalid_state' };
   }
 
   const clientId = process.env.FITBIT_CLIENT_ID;
   const clientSecret = process.env.FITBIT_CLIENT_SECRET;
-  if (!clientId || !clientSecret) {
-    return res.redirect(`${frontendUrl}/?fitbit_error=not_configured`);
-  }
-
-  const redirectUri =
-    (process.env.FITBIT_REDIRECT_URI || baseUrl).replace(/\/$/, '') + '/api/fitbit/callback';
+  if (!clientId || !clientSecret) return { error: 'not_configured' };
 
   const body = new URLSearchParams({
     client_id: clientId,
@@ -90,40 +80,39 @@ router.get('/callback', async (req, res) => {
   });
 
   const auth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+  const tokenRes = await fetch(FITBIT_TOKEN_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Authorization: `Basic ${auth}`,
+    },
+    body: body.toString(),
+  });
 
-  try {
-    const tokenRes = await fetch(FITBIT_TOKEN_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: `Basic ${auth}`,
-      },
-      body: body.toString(),
-    });
+  const data = await tokenRes.json();
+  if (!tokenRes.ok) {
+    console.error('[fitbit] Token error:', data);
+    return { error: 'token_failed' };
+  }
 
-    const data = await tokenRes.json();
-    if (!tokenRes.ok) {
-      console.error('[fitbit] Token error:', data);
-      return res.redirect(`${frontendUrl}/?fitbit_error=token_failed`);
-    }
-    const expiresAt = new Date(Date.now() + (data.expires_in || 28800) * 1000);
-    await pool.query(
-      `INSERT INTO fitbit_tokens (profile_id, access_token, refresh_token, expires_at, fitbit_user_id)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (profile_id) DO UPDATE SET
-         access_token = EXCLUDED.access_token,
-         refresh_token = EXCLUDED.refresh_token,
-         expires_at = EXCLUDED.expires_at,
-         fitbit_user_id = EXCLUDED.fitbit_user_id,
-         updated_at = NOW()`,
-      [profileId, data.access_token, data.refresh_token, expiresAt, data.user_id || null]
-    );
+  const expiresAt = new Date(Date.now() + (data.expires_in || 28800) * 1000);
+  await pool.query(
+    `INSERT INTO fitbit_tokens (profile_id, access_token, refresh_token, expires_at, fitbit_user_id)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (profile_id) DO UPDATE SET
+       access_token = EXCLUDED.access_token,
+       refresh_token = EXCLUDED.refresh_token,
+       expires_at = EXCLUDED.expires_at,
+       fitbit_user_id = EXCLUDED.fitbit_user_id,
+       updated_at = NOW()`,
+    [profileId, data.access_token, data.refresh_token, expiresAt, data.user_id || null]
+  );
 
-    const summaryPath = join(__dirname, '../../../docs/fitbit-payload-summary.md');
-    const sanitized = { ...data };
-    if (sanitized.access_token) sanitized.access_token = '[REDACTED]';
-    if (sanitized.refresh_token) sanitized.refresh_token = '[REDACTED]';
-    const md = `# Fitbit OAuth Payload Summary
+  const summaryPath = join(__dirname, '../../../docs/fitbit-payload-summary.md');
+  const sanitized = { ...data };
+  if (sanitized.access_token) sanitized.access_token = '[REDACTED]';
+  if (sanitized.refresh_token) sanitized.refresh_token = '[REDACTED]';
+  const md = `# Fitbit OAuth Payload Summary
 
 Generated: ${new Date().toISOString()}
 Profile ID: ${profileId}
@@ -145,12 +134,61 @@ Profile ID: ${profileId}
 ${JSON.stringify(sanitized, null, 2)}
 \`\`\`
 `;
-    try {
-      writeFileSync(summaryPath, md);
-    } catch (e) {
-      console.warn('[fitbit] Could not write payload summary:', e.message);
-    }
+  try {
+    writeFileSync(summaryPath, md);
+  } catch (e) {
+    console.warn('[fitbit] Could not write payload summary:', e.message);
+  }
+  return { ok: true };
+}
 
+// POST /api/fitbit/complete-callback - frontend calls after Fitbit redirects to /fitbit-callback (fixes Safari/mobile dev)
+router.post('/complete-callback', async (req, res) => {
+  const { code, state } = req.body || {};
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+  if (!code || !state) {
+    return res.json({ error: 'missing_params' });
+  }
+
+  const baseUrl = process.env.FITBIT_REDIRECT_URI || '';
+  const redirectUri = getRedirectUri() || (baseUrl.replace(/\/$/, '') + '/fitbit-callback');
+
+  try {
+    const result = await exchangeFitbitCode(code, state, redirectUri);
+    if (result.error) {
+      return res.json({ error: result.error });
+    }
+    return res.json({ ok: true, redirect: `${frontendUrl}/?fitbit_connected=1` });
+  } catch (err) {
+    console.error('[fitbit] complete-callback error:', err);
+    return res.json({ error: 'server_error' });
+  }
+});
+
+// GET /api/fitbit/callback - Fitbit redirects here when using backend URL (no requireProfileId)
+router.get('/callback', async (req, res) => {
+  const { code, state, error } = req.query;
+  const baseUrl = req.protocol + '://' + req.get('host');
+  const frontendUrl = process.env.FRONTEND_URL || baseUrl.replace(/3001/, '5173').replace(/3000/, '5173');
+
+  if (error) {
+    console.error('[fitbit] OAuth error:', error);
+    return res.redirect(`${frontendUrl}/?fitbit_error=${encodeURIComponent(error)}`);
+  }
+
+  if (!code || !state) {
+    return res.redirect(`${frontendUrl}/?fitbit_error=missing_params`);
+  }
+
+  const redirectUri =
+    getRedirectUri() || (baseUrl.replace(/\/$/, '') + '/api/fitbit/callback');
+
+  try {
+    const result = await exchangeFitbitCode(code, state, redirectUri);
+    if (result.error) {
+      return res.redirect(`${frontendUrl}/?fitbit_error=${result.error}`);
+    }
     return res.redirect(`${frontendUrl}/?fitbit_connected=1`);
   } catch (err) {
     console.error('[fitbit] Callback error:', err);

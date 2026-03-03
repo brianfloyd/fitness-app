@@ -157,6 +157,8 @@ These can be wired into the daily log (e.g. Steps field) and DayCounter stats.
 |-------|----------|
 | "Fitbit not configured" | Set `FITBIT_CLIENT_ID` and `FITBIT_CLIENT_SECRET` in `.env` |
 | Redirect URI mismatch | Callback URL in Fitbit app must exactly match `{FITBIT_REDIRECT_URI}/api/fitbit/callback` |
+| "Screen not found" or Safari error when connecting | Use **frontend callback** for dev: set `FITBIT_REDIRECT_URI=https://localhost:5173/fitbit-callback`. Add `https://localhost:5173/fitbit-callback` in [dev.fitbit.com](https://dev.fitbit.com) → your app → Callback URL. For iPhone on same network, use `https://YOUR-LAN-IP:5173/fitbit-callback` (e.g. `https://192.168.1.112:5173/fitbit-callback`) and add that URL to Fitbit too. |
+| Dev shows "not connected" but prod works | Dev and prod use different databases. `fitbit_tokens` are stored per DB. Connect Fitbit in dev separately, or ensure dev `.env` has correct `FITBIT_REDIRECT_URI` so OAuth completes. |
 | 401 after OAuth | Check that the migration ran and `fitbit_tokens` exists |
 | Token refresh fails | Ensure `FITBIT_CLIENT_SECRET` is set; refresh uses the same credentials |
 

@@ -64,6 +64,7 @@
                       name: exercise.name,
                       muscleGroup: exercise.muscleGroup,
                       sets: exercise.sets || [],
+                      direction: exercise.direction ?? null,
                       date: log.date,
                     });
                   }
@@ -260,6 +261,7 @@
       name: exerciseName,
       muscleGroup: muscleGroup,
       sets: sets,
+      direction: history?.direction ?? null,
       completed: false,
     };
     
@@ -340,6 +342,17 @@
     dispatch('exercisesChanged', exercises);
   }
   
+  function cycleDirection(exerciseId) {
+    exercises = exercises.map(ex => {
+      if (ex.id === exerciseId) {
+        const next = ex.direction === null ? 'up' : ex.direction === 'up' ? 'down' : null;
+        return { ...ex, direction: next };
+      }
+      return ex;
+    });
+    dispatch('exercisesChanged', exercises);
+  }
+
   function copyWeightToAllSets(exerciseId, weight) {
     exercises = exercises.map(ex => {
       if (ex.id === exerciseId) {
@@ -683,6 +696,23 @@
               </div>
               <h4 class="exercise-name">{exercise.name}</h4>
             </div>
+            <button
+              type="button"
+              class="direction-btn"
+              class:up={exercise.direction === 'up'}
+              class:down={exercise.direction === 'down'}
+              on:click={() => cycleDirection(exercise.id)}
+              aria-label={exercise.direction === 'up' ? 'Felt good last time, try increasing' : exercise.direction === 'down' ? 'Struggled last time' : 'Set how last session felt'}
+              title={exercise.direction === 'up' ? 'Felt good – try heavier' : exercise.direction === 'down' ? 'Struggled – consider lighter' : 'Tap to set: up = try heavier, down = struggled'}
+            >
+              {#if exercise.direction === 'up'}
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"></polyline></svg>
+              {:else if exercise.direction === 'down'}
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              {:else}
+                <span class="direction-placeholder">−</span>
+              {/if}
+            </button>
           </div>
           
           <div class="sets-container">
@@ -733,6 +763,24 @@
                   placeholder="10"
                   value={set.reps}
                   on:input={(e) => updateSet(exercise.id, set.id, 'reps', e.target.value)}
+                  on:blur={(e) => {
+                    const value = e.target.value;
+                    if (value) {
+                      exercises = exercises.map(ex => {
+                        if (ex.id === exercise.id) {
+                          return {
+                            ...ex,
+                            sets: ex.sets.map(s => ({
+                              ...s,
+                              reps: (!s.reps || s.reps === '') ? value : s.reps
+                            }))
+                          };
+                        }
+                        return ex;
+                      });
+                      dispatch('exercisesChanged', exercises);
+                    }
+                  }}
                 />
                 <button
                   type="button"
@@ -805,6 +853,26 @@
               {calculateTotalReps(exercise.sets)} reps • {calculateTotalVolume(exercise.sets).toLocaleString('en-US', { maximumFractionDigits: 0 })} lbs
             </span>
           </div>
+          <button
+            type="button"
+            class="direction-btn pill-direction-btn"
+            class:up={exercise.direction === 'up'}
+            class:down={exercise.direction === 'down'}
+            on:click|stopPropagation={(e) => {
+              e.preventDefault();
+              cycleDirection(exercise.id);
+            }}
+            aria-label={exercise.direction === 'up' ? 'Felt good – try heavier next time' : exercise.direction === 'down' ? 'Struggled – consider lighter next time' : 'Set for next time'}
+            title="Tap to set: up = try heavier, down = struggled, − = same"
+          >
+            {#if exercise.direction === 'up'}
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"></polyline></svg>
+            {:else if exercise.direction === 'down'}
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            {:else}
+              <span class="direction-placeholder">−</span>
+            {/if}
+          </button>
         </div>
       {/if}
     {/each}
@@ -1209,7 +1277,45 @@
     word-break: break-word;
     overflow-wrap: break-word;
   }
-  
+
+  .direction-btn {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: var(--border-radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface-elevated);
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .direction-btn:hover {
+    background: var(--border);
+  }
+  .direction-btn.up {
+    color: #22c55e;
+    border-color: rgba(34, 197, 94, 0.5);
+    background: rgba(34, 197, 94, 0.15);
+  }
+  .direction-btn.down {
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.5);
+    background: rgba(239, 68, 68, 0.15);
+  }
+  .direction-placeholder {
+    font-size: 1.25rem;
+    line-height: 1;
+    opacity: 0.5;
+  }
+
+  .pill-direction-btn {
+    flex-shrink: 0;
+    align-self: center;
+  }
   
   .sets-container {
     margin-top: var(--spacing-sm);

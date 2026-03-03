@@ -1,32 +1,14 @@
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
 import pool from './db/connection.js';
+import { runMigrations } from './runMigrations.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const root = join(__dirname, '../..');
-
-const MIGRATIONS = [
-  { name: 'schema.sql', path: join(root, 'database/schema.sql') },
-  { name: 'add_foods_table.sql', path: join(root, 'database/migrations/add_foods_table.sql') },
-  { name: 'add_profiles_table.sql', path: join(root, 'database/migrations/add_profiles_table.sql') },
-  { name: 'add_foods_column.sql', path: join(root, 'database/migrations/add_foods_column.sql') },
-  { name: 'add_barcode_to_foods.sql', path: join(root, 'database/migrations/add_barcode_to_foods.sql') },
-  { name: 'add_profile_id_to_tables.sql', path: join(root, 'database/migrations/add_profile_id_to_tables.sql') },
-  { name: 'add_fitbit_tokens.sql', path: join(root, 'database/migrations/add_fitbit_tokens.sql') },
-  { name: 'add_oauth_email_to_profiles.sql', path: join(root, 'database/migrations/add_oauth_email_to_profiles.sql') },
-];
-
+/**
+ * CLI: run the same migrations used on server startup (e.g. for a one-off sync).
+ * Same list as runMigrations.js — used by server on every start (local and Railway).
+ */
 async function run() {
   try {
-    console.log('Running all database migrations...');
-    for (const { name, path } of MIGRATIONS) {
-      console.log(`  Running: ${name}`);
-      const sql = readFileSync(path, 'utf8');
-      await pool.query(sql);
-      console.log(`  ✅ ${name} completed.`);
-    }
+    console.log('Running all database migrations (same as server startup)...');
+    await runMigrations();
     const r = await pool.query(
       `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name`
     );

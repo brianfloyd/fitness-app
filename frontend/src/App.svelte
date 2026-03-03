@@ -7,6 +7,7 @@
   import MobileBottomNav from './lib/MobileBottomNav.svelte';
   import PrivacyPage from './lib/PrivacyPage.svelte';
   import TermsPage from './lib/TermsPage.svelte';
+  import FitbitCallbackPage from './lib/FitbitCallbackPage.svelte';
 
   let currentView = 'log';
   let routePath = (typeof window !== 'undefined' && window.location.pathname) || '';
@@ -53,6 +54,8 @@
   <PrivacyPage />
 {:else if routePath === '/terms'}
   <TermsPage />
+{:else if routePath === '/fitbit-callback'}
+  <FitbitCallbackPage />
 {:else if $currentUser}
   <main>
     <!-- Desktop header -->

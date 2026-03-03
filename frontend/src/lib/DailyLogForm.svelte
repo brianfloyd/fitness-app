@@ -120,6 +120,8 @@
   let steps = '';
   let fitbitConnected = false;
   let fitbitSteps = null; // Fitbit steps for header (fetched when connected)
+  let fitbitZoneMinutes = null; // Active zone minutes from Fitbit
+  let fitbitCaloriesOut = null; // Calories expended from Fitbit
   
   // Copy to functionality
   let showCopyModal = false;
@@ -382,13 +384,26 @@
 
   // Fetch Fitbit steps for header when connected (use manual steps first, else Fitbit)
   $: headerSteps = parseFloat(steps) || fitbitSteps || 0;
+  $: headerZoneMinutes = fitbitZoneMinutes ?? 0;
+  $: headerCaloriesExpended = fitbitCaloriesOut;
 
   $: if (fitbitConnected && selectedDate) {
     getFitbitDailyMetrics(selectedDate)
-      .then((res) => { if (res?.metrics?.steps != null) fitbitSteps = res.metrics.steps; })
-      .catch(() => { fitbitSteps = null; });
+      .then((res) => {
+        const m = res?.metrics;
+        fitbitSteps = m?.steps ?? null;
+        fitbitZoneMinutes = m?.activeZoneMinutes ?? null;
+        fitbitCaloriesOut = m?.caloriesOut != null ? Math.round(m.caloriesOut) : null;
+      })
+      .catch(() => {
+        fitbitSteps = null;
+        fitbitZoneMinutes = null;
+        fitbitCaloriesOut = null;
+      });
   } else {
     fitbitSteps = null;
+    fitbitZoneMinutes = null;
+    fitbitCaloriesOut = null;
   }
   
   // Validate date is within range
@@ -684,12 +699,14 @@
           onNext={navigateToNextDay}
           volume={totalWorkoutVolume}
           calories={totalCalories}
+          caloriesExpended={headerCaloriesExpended}
           protein={foodMacros.protein || 0}
+          zoneMinutes={headerZoneMinutes}
           steps={headerSteps}
         />
         <div class="card mobile-photo-card">
           <div class="mobile-photo-header">
-            <h3 class="section-header">Photo</h3>
+            <h3 class="section-header">Photo <span class="section-subtitle">(tap and hold pic to toggle AI view)</span></h3>
             <div class="header-actions">
               <button type="button" class="graph-icon-btn" on:click|stopPropagation={() => openGraphModal('photo')} aria-label="View photo progression" title="Photo progression">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
@@ -718,7 +735,9 @@
           onNext={navigateToNextDay}
           volume={totalWorkoutVolume}
           calories={totalCalories}
+          caloriesExpended={headerCaloriesExpended}
           protein={foodMacros.protein || 0}
+          zoneMinutes={headerZoneMinutes}
           steps={headerSteps}
         />
         <div class="card">
@@ -753,7 +772,9 @@
           onNext={navigateToNextDay}
           volume={totalWorkoutVolume}
           calories={totalCalories}
+          caloriesExpended={headerCaloriesExpended}
           protein={foodMacros.protein || 0}
+          zoneMinutes={headerZoneMinutes}
           steps={headerSteps}
         />
         <div class="card">
@@ -788,7 +809,9 @@
           onNext={navigateToNextDay}
           volume={totalWorkoutVolume}
           calories={totalCalories}
+          caloriesExpended={headerCaloriesExpended}
           protein={foodMacros.protein || 0}
+          zoneMinutes={headerZoneMinutes}
           steps={headerSteps}
         />
         <div class="card">
@@ -839,7 +862,7 @@
     </div>
   {:else}
     <!-- Desktop layout -->
-    <DayCounter {dayNumber} {totalDays} onPrevious={navigateToPreviousDay} onNext={navigateToNextDay} volume={totalWorkoutVolume} calories={totalCalories} protein={foodMacros.protein || 0} steps={headerSteps} />
+    <DayCounter {dayNumber} {totalDays} onPrevious={navigateToPreviousDay} onNext={navigateToNextDay} volume={totalWorkoutVolume} calories={totalCalories} caloriesExpended={headerCaloriesExpended} protein={foodMacros.protein || 0} zoneMinutes={headerZoneMinutes} steps={headerSteps} />
     
     <div class="form-layout">
         <!-- Left Column: Photo, Date, Body Composition, and Sleep -->
@@ -1245,6 +1268,13 @@
     font-weight: 600;
     margin-bottom: var(--spacing-xs);
     position: relative;
+  }
+
+  .section-subtitle {
+    font-size: 0.7rem;
+    font-weight: 400;
+    color: var(--text-muted);
+    margin-left: var(--spacing-xs);
   }
   
   .section-with-copy {
@@ -1776,11 +1806,11 @@
     }
   }
 
-  /* Mobile home compact layout - no scroll, all on one screen */
+  /* Mobile home compact layout - maximize photo, minimal gaps */
   .mobile-home {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-sm);
+    gap: 2px;
     padding-bottom: var(--spacing-xs);
     height: calc(100svh - 92px - env(safe-area-inset-top) - 2 * env(safe-area-inset-bottom));
     max-height: calc(100svh - 92px - env(safe-area-inset-top) - 2 * env(safe-area-inset-bottom));
@@ -1807,14 +1837,15 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    padding: var(--spacing-xs);
   }
 
   .mobile-photo-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: var(--spacing-sm);
-    padding-bottom: var(--spacing-sm);
+    margin-bottom: 2px;
+    padding-bottom: var(--spacing-xs);
     border-bottom: 1px solid var(--border);
   }
 
@@ -1833,6 +1864,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    padding: 0;
   }
 
   .mobile-photo-wrap :global(.photo-upload) {
@@ -1873,13 +1905,13 @@
   .mobile-body-inline {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: var(--spacing-sm);
+    gap: var(--spacing-xs);
     flex-shrink: 0;
   }
 
   .mobile-body-input {
     width: 100%;
-    padding: var(--spacing-md);
+    padding: var(--spacing-sm);
     font-size: 1rem;
     background: var(--surface);
     border: 1px solid var(--border);
