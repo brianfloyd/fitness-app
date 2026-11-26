@@ -10,6 +10,7 @@
   export let steps = 0;
   export let zoneMinutes = 0;
   export let caloriesExpended = null; // Fitbit calories out; only shown when calories (consumed) > 0
+  export let programPhase = null; // { phase: 'ramp'|'full'|'pre-ramp', label: string, isRamp: boolean }
 
   function compactNum(n) {
     const num = Number(n) || 0;
@@ -64,6 +65,9 @@
       <h2>Day {dayNumber} of {totalDays}</h2>
       {#if displayDate}
         <span class="display-date">{displayDate}</span>
+      {/if}
+      {#if programPhase}
+        <span class="program-phase" class:ramp={programPhase.isRamp}>{programPhase.label}</span>
       {/if}
     </div>
     {#if showNext}
@@ -122,6 +126,22 @@
     font-size: 0.875rem;
     color: var(--text-muted, var(--text-secondary));
     font-weight: 500;
+  }
+  
+  .program-phase {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: linear-gradient(135deg, var(--primary-color), #6366f1);
+    color: white;
+    margin-top: 2px;
+  }
+  
+  .program-phase.ramp {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
   }
 
   .day-display h2 {

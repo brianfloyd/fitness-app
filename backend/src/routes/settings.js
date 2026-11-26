@@ -25,6 +25,16 @@ router.get('/', async (req, res) => {
       return res.json({
         total_days: 84,
         start_date: new Date().toISOString().split('T')[0],
+        ramp_start_date: null,
+        program_start_date: null,
+        block_duration_weeks: 4,
+        calorie_target_min: 2100,
+        calorie_target_max: 2200,
+        protein_target_min: 160,
+        protein_target_max: 175,
+        flexible_days: '0,6',
+        ultraskate_date: null,
+        workout_split: '{"1":"back,biceps","2":"chest,triceps","3":"shoulders","4":"legs","5":"back,biceps,chest,triceps,shoulders"}',
       });
     }
     
@@ -35,6 +45,16 @@ router.get('/', async (req, res) => {
       start_date: settings.start_date,
       has_goal_photo: !!settings.goal_photo,
       goal_photo_mime_type: settings.goal_photo_mime_type || null,
+      ramp_start_date: settings.ramp_start_date || null,
+      program_start_date: settings.program_start_date || null,
+      block_duration_weeks: settings.block_duration_weeks || 4,
+      calorie_target_min: settings.calorie_target_min || 2100,
+      calorie_target_max: settings.calorie_target_max || 2200,
+      protein_target_min: settings.protein_target_min || 160,
+      protein_target_max: settings.protein_target_max || 175,
+      flexible_days: settings.flexible_days || '0,6',
+      ultraskate_date: settings.ultraskate_date || null,
+      workout_split: settings.workout_split || '{"1":"back,biceps","2":"chest,triceps","3":"shoulders","4":"legs","5":"back,biceps,chest,triceps,shoulders"}',
     });
   } catch (error) {
     console.error('Error fetching settings:', error);
@@ -122,6 +142,85 @@ router.put('/', upload.single('goal_photo'), async (req, res) => {
     
     res.status(500).json({ 
       error: 'Failed to update settings',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Update program settings (ramp dates, nutrition targets, etc.)
+router.put('/program', async (req, res) => {
+  try {
+    const profileId = req.profileId;
+    const {
+      ramp_start_date,
+      program_start_date,
+      block_duration_weeks,
+      calorie_target_min,
+      calorie_target_max,
+      protein_target_min,
+      protein_target_max,
+      flexible_days,
+      ultraskate_date,
+      workout_split,
+    } = req.body;
+    
+    const existing = await pool.query(
+      'SELECT * FROM app_settings WHERE profile_id = $1 ORDER BY id DESC LIMIT 1',
+      [profileId]
+    );
+    
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: 'Settings not found. Create basic settings first.' });
+    }
+    
+    const result = await pool.query(
+      `UPDATE app_settings SET 
+        ramp_start_date = COALESCE($1, ramp_start_date),
+        program_start_date = COALESCE($2, program_start_date),
+        block_duration_weeks = COALESCE($3, block_duration_weeks),
+        calorie_target_min = COALESCE($4, calorie_target_min),
+        calorie_target_max = COALESCE($5, calorie_target_max),
+        protein_target_min = COALESCE($6, protein_target_min),
+        protein_target_max = COALESCE($7, protein_target_max),
+        flexible_days = COALESCE($8, flexible_days),
+        ultraskate_date = COALESCE($9, ultraskate_date),
+        workout_split = COALESCE($10, workout_split),
+        updated_at = CURRENT_TIMESTAMP
+       WHERE id = $11
+       RETURNING *`,
+      [
+        ramp_start_date || null,
+        program_start_date || null,
+        block_duration_weeks || null,
+        calorie_target_min || null,
+        calorie_target_max || null,
+        protein_target_min || null,
+        protein_target_max || null,
+        flexible_days || null,
+        ultraskate_date || null,
+        workout_split || null,
+        existing.rows[0].id,
+      ]
+    );
+    
+    const settings = result.rows[0];
+    res.json({
+      id: settings.id,
+      ramp_start_date: settings.ramp_start_date,
+      program_start_date: settings.program_start_date,
+      block_duration_weeks: settings.block_duration_weeks,
+      calorie_target_min: settings.calorie_target_min,
+      calorie_target_max: settings.calorie_target_max,
+      protein_target_min: settings.protein_target_min,
+      protein_target_max: settings.protein_target_max,
+      flexible_days: settings.flexible_days,
+      ultraskate_date: settings.ultraskate_date,
+      workout_split: settings.workout_split,
+    });
+  } catch (error) {
+    console.error('Error updating program settings:', error);
+    res.status(500).json({ 
+      error: 'Failed to update program settings',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }

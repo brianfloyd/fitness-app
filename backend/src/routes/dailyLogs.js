@@ -40,7 +40,7 @@ router.get('/', async (req, res) => {
     const offset = (page - 1) * limit;
     
     const result = await pool.query(
-      'SELECT id, date, day_number, photo_mime_type, weight, fat_percent, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps, created_at, updated_at FROM daily_logs WHERE profile_id = $1 ORDER BY date DESC LIMIT $2 OFFSET $3',
+      'SELECT id, date, day_number, photo_mime_type, weight, fat_percent, waist, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps, skate_training, created_at, updated_at FROM daily_logs WHERE profile_id = $1 ORDER BY date DESC LIMIT $2 OFFSET $3',
       [profileId, limit, offset]
     );
     
@@ -71,7 +71,7 @@ router.get('/range', async (req, res) => {
       return res.status(400).json({ error: 'startDate and endDate query parameters are required' });
     }
     const result = await pool.query(
-      'SELECT id, date, day_number, photo_mime_type, weight, fat_percent, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps, created_at, updated_at FROM daily_logs WHERE profile_id = $1 AND date >= $2 AND date <= $3 ORDER BY date ASC',
+      'SELECT id, date, day_number, photo_mime_type, weight, fat_percent, waist, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps, skate_training, created_at, updated_at FROM daily_logs WHERE profile_id = $1 AND date >= $2 AND date <= $3 ORDER BY date ASC',
       [profileId, startDate, endDate]
     );
     
@@ -92,7 +92,7 @@ router.get('/:date', async (req, res) => {
     const profileId = req.profileId;
     const { date } = req.params;
     const result = await pool.query(
-      'SELECT id, date, day_number, photo_mime_type, weight, fat_percent, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps, created_at, updated_at FROM daily_logs WHERE profile_id = $1 AND date = $2',
+      'SELECT id, date, day_number, photo_mime_type, weight, fat_percent, waist, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps, skate_training, created_at, updated_at FROM daily_logs WHERE profile_id = $1 AND date = $2',
       [profileId, date]
     );
     
@@ -114,6 +114,7 @@ router.get('/:date', async (req, res) => {
         photo_mime_type: null,
         weight: null,
         fat_percent: null,
+        waist: null,
         workout: null,
         protein: null,
         fat: null,
@@ -122,6 +123,7 @@ router.get('/:date', async (req, res) => {
         sleep_score: null,
         strava: null,
         steps: null,
+        skate_training: null,
       });
     }
     
@@ -151,7 +153,7 @@ router.get('/today', async (req, res) => {
     const profileId = req.profileId;
     const today = new Date().toISOString().split('T')[0];
     const result = await pool.query(
-      'SELECT id, date, day_number, photo_mime_type, weight, fat_percent, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps, created_at, updated_at FROM daily_logs WHERE profile_id = $1 AND date = $2',
+      'SELECT id, date, day_number, photo_mime_type, weight, fat_percent, waist, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps, skate_training, created_at, updated_at FROM daily_logs WHERE profile_id = $1 AND date = $2',
       [profileId, today]
     );
     const dayNumber = await calculateDayNumber(profileId, today);
@@ -169,6 +171,7 @@ router.get('/today', async (req, res) => {
         photo_mime_type: null,
         weight: null,
         fat_percent: null,
+        waist: null,
         workout: null,
         protein: null,
         fat: null,
@@ -177,6 +180,7 @@ router.get('/today', async (req, res) => {
         sleep_score: null,
         strava: null,
         steps: null,
+        skate_training: null,
       });
     }
     
@@ -199,6 +203,7 @@ router.post('/', upload.single('photo'), async (req, res) => {
       date,
       weight,
       fat_percent,
+      waist,
       workout,
       protein,
       fat,
@@ -208,6 +213,7 @@ router.post('/', upload.single('photo'), async (req, res) => {
       sleep_score,
       strava,
       steps,
+      skate_training,
     } = body;
     const logDate = date || new Date().toISOString().split('T')[0];
     const workoutLen = typeof body.workout === 'string' ? body.workout.length : 0;
@@ -237,36 +243,36 @@ router.post('/', upload.single('photo'), async (req, res) => {
       if (photo) {
         result = await pool.query(
           `UPDATE daily_logs 
-           SET day_number = $1, photo = $2, photo_mime_type = $3, weight = $4, fat_percent = $5, 
-               workout = $6, protein = $7, fat = $8, carbs = $9, foods = $10, sleep_time = $11, 
-               sleep_score = $12, strava = $13, steps = $14, updated_at = CURRENT_TIMESTAMP
-           WHERE profile_id = $15 AND date = $16
-           RETURNING id, date, day_number, photo_mime_type, weight, fat_percent, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps`,
-          [dayNumber, photo, photoMimeType, weight || null, fat_percent || null, workout || null,
+           SET day_number = $1, photo = $2, photo_mime_type = $3, weight = $4, fat_percent = $5, waist = $6,
+               workout = $7, protein = $8, fat = $9, carbs = $10, foods = $11, sleep_time = $12, 
+               sleep_score = $13, strava = $14, steps = $15, skate_training = $16, updated_at = CURRENT_TIMESTAMP
+           WHERE profile_id = $17 AND date = $18
+           RETURNING id, date, day_number, photo_mime_type, weight, fat_percent, waist, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps, skate_training`,
+          [dayNumber, photo, photoMimeType, weight || null, fat_percent || null, waist || null, workout || null,
            protein || null, fat || null, carbs || null, foods || null, sleep_time || null, sleep_score || null,
-           strava || null, steps || null, profileId, logDate]
+           strava || null, steps || null, skate_training || null, profileId, logDate]
         );
       } else {
         result = await pool.query(
           `UPDATE daily_logs 
-           SET day_number = $1, weight = $2, fat_percent = $3, workout = $4, protein = $5, 
-               fat = $6, carbs = $7, foods = $8, sleep_time = $9, sleep_score = $10, strava = $11, 
-               steps = $12, updated_at = CURRENT_TIMESTAMP
-           WHERE profile_id = $13 AND date = $14
-           RETURNING id, date, day_number, photo_mime_type, weight, fat_percent, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps`,
-          [dayNumber, weight || null, fat_percent || null, workout || null, protein || null,
+           SET day_number = $1, weight = $2, fat_percent = $3, waist = $4, workout = $5, protein = $6, 
+               fat = $7, carbs = $8, foods = $9, sleep_time = $10, sleep_score = $11, strava = $12, 
+               steps = $13, skate_training = $14, updated_at = CURRENT_TIMESTAMP
+           WHERE profile_id = $15 AND date = $16
+           RETURNING id, date, day_number, photo_mime_type, weight, fat_percent, waist, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps, skate_training`,
+          [dayNumber, weight || null, fat_percent || null, waist || null, workout || null, protein || null,
            fat || null, carbs || null, foods || null, sleep_time || null, sleep_score || null, strava || null,
-           steps || null, profileId, logDate]
+           steps || null, skate_training || null, profileId, logDate]
         );
       }
     } else {
       result = await pool.query(
-        `INSERT INTO daily_logs (profile_id, date, day_number, photo, photo_mime_type, weight, fat_percent, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-         RETURNING id, date, day_number, photo_mime_type, weight, fat_percent, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps`,
-        [profileId, logDate, dayNumber, photo, photoMimeType, weight || null, fat_percent || null, workout || null,
+        `INSERT INTO daily_logs (profile_id, date, day_number, photo, photo_mime_type, weight, fat_percent, waist, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps, skate_training)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+         RETURNING id, date, day_number, photo_mime_type, weight, fat_percent, waist, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps, skate_training`,
+        [profileId, logDate, dayNumber, photo, photoMimeType, weight || null, fat_percent || null, waist || null, workout || null,
          protein || null, fat || null, carbs || null, foods || null, sleep_time || null, sleep_score || null,
-         strava || null, steps || null]
+         strava || null, steps || null, skate_training || null]
       );
     }
     const settingsResult = await pool.query(
@@ -301,6 +307,7 @@ router.put('/:date', upload.single('photo'), async (req, res) => {
     const {
       weight,
       fat_percent,
+      waist,
       workout,
       protein,
       fat,
@@ -310,6 +317,7 @@ router.put('/:date', upload.single('photo'), async (req, res) => {
       sleep_score,
       strava,
       steps,
+      skate_training,
     } = req.body;
     const dayNumber = await calculateDayNumber(profileId, date);
     const existing = await pool.query(
@@ -325,26 +333,26 @@ router.put('/:date', upload.single('photo'), async (req, res) => {
     if (req.file) {
       result = await pool.query(
         `UPDATE daily_logs 
-         SET day_number = $1, photo = $2, photo_mime_type = $3, weight = $4, fat_percent = $5, 
-             workout = $6, protein = $7, fat = $8, carbs = $9, foods = $10, sleep_time = $11, 
-             sleep_score = $12, strava = $13, steps = $14, updated_at = CURRENT_TIMESTAMP
-         WHERE profile_id = $15 AND date = $16
-         RETURNING id, date, day_number, photo_mime_type, weight, fat_percent, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps`,
-        [dayNumber, req.file.buffer, req.file.mimetype, weight || null, fat_percent || null, workout || null,
+         SET day_number = $1, photo = $2, photo_mime_type = $3, weight = $4, fat_percent = $5, waist = $6,
+             workout = $7, protein = $8, fat = $9, carbs = $10, foods = $11, sleep_time = $12, 
+             sleep_score = $13, strava = $14, steps = $15, skate_training = $16, updated_at = CURRENT_TIMESTAMP
+         WHERE profile_id = $17 AND date = $18
+         RETURNING id, date, day_number, photo_mime_type, weight, fat_percent, waist, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps, skate_training`,
+        [dayNumber, req.file.buffer, req.file.mimetype, weight || null, fat_percent || null, waist || null, workout || null,
          protein || null, fat || null, carbs || null, foods || null, sleep_time || null, sleep_score || null,
-         strava || null, steps || null, profileId, date]
+         strava || null, steps || null, skate_training || null, profileId, date]
       );
     } else {
       result = await pool.query(
         `UPDATE daily_logs 
-         SET day_number = $1, weight = $2, fat_percent = $3, workout = $4, protein = $5, 
-             fat = $6, carbs = $7, foods = $8, sleep_time = $9, sleep_score = $10, strava = $11, 
-             steps = $12, updated_at = CURRENT_TIMESTAMP
-         WHERE profile_id = $13 AND date = $14
-         RETURNING id, date, day_number, photo_mime_type, weight, fat_percent, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps`,
-        [dayNumber, weight || null, fat_percent || null, workout || null, protein || null,
+         SET day_number = $1, weight = $2, fat_percent = $3, waist = $4, workout = $5, protein = $6, 
+             fat = $7, carbs = $8, foods = $9, sleep_time = $10, sleep_score = $11, strava = $12, 
+             steps = $13, skate_training = $14, updated_at = CURRENT_TIMESTAMP
+         WHERE profile_id = $15 AND date = $16
+         RETURNING id, date, day_number, photo_mime_type, weight, fat_percent, waist, workout, protein, fat, carbs, foods, sleep_time, sleep_score, strava, steps, skate_training`,
+        [dayNumber, weight || null, fat_percent || null, waist || null, workout || null, protein || null,
          fat || null, carbs || null, foods || null, sleep_time || null, sleep_score || null, strava || null,
-         steps || null, profileId, date]
+         steps || null, skate_training || null, profileId, date]
       );
     }
     const settingsResult = await pool.query(

@@ -1,8 +1,8 @@
 <script>
   import { createEventDispatcher, onMount } from 'svelte';
-  import { getRecentLogs } from '../lib/api.js';
+  import { getRecentLogs, getExerciseSubstitutions } from '../lib/api.js';
   
-  export let exercises = []; // Array of { id, name, muscleGroup, sets: [{ id, weight, reps }], completed: boolean }
+  export let exercises = []; // Array of { id, name, muscleGroup, sets: [{ id, weight, reps }], completed: boolean, left_shoulder_pain: 0-10, elbow_pain: 0-10 }
   
   const dispatch = createEventDispatcher();
   
@@ -185,6 +185,7 @@
   let exerciseSearchTerm = '';
   let addingExercise = null;
   let showCustomExerciseForm = false;
+  let exerciseSubstitutions = {}; // Map of exercise name -> substitution suggestions
   let customExerciseData = {
     movementType: '',
     equipment: '',
@@ -263,6 +264,8 @@
       sets: sets,
       direction: history?.direction ?? null,
       completed: false,
+      left_shoulder_pain: 0,
+      elbow_pain: 0,
     };
     
     // Insert exercise maintaining muscle group order
@@ -351,6 +354,32 @@
       return ex;
     });
     dispatch('exercisesChanged', exercises);
+  }
+
+  function updatePain(exerciseId, field, value) {
+    const painValue = Math.max(0, Math.min(10, parseInt(value) || 0));
+    exercises = exercises.map(ex => {
+      if (ex.id === exerciseId) {
+        const updated = { ...ex, [field]: painValue };
+        // If pain is logged (> 0), fetch substitutions
+        if (painValue > 0 && !exerciseSubstitutions[ex.name]) {
+          fetchSubstitutions(ex.name);
+        }
+        return updated;
+      }
+      return ex;
+    });
+    dispatch('exercisesChanged', exercises);
+  }
+  
+  async function fetchSubstitutions(exerciseName) {
+    try {
+      const result = await getExerciseSubstitutions(exerciseName);
+      exerciseSubstitutions = { ...exerciseSubstitutions, [exerciseName]: result.substitutions || [] };
+    } catch (err) {
+      console.error('Error fetching substitutions:', err);
+      exerciseSubstitutions = { ...exerciseSubstitutions, [exerciseName]: [] };
+    }
   }
 
   function copyWeightToAllSets(exerciseId, weight) {
@@ -794,6 +823,54 @@
               </div>
             {/each}
             </div>
+            <div class="pain-tracking">
+              <div class="pain-label">Pain/Flare (0-10):</div>
+              <div class="pain-inputs">
+                <div class="pain-field">
+                  <label for="shoulder-pain-{exercise.id}">L Shoulder</label>
+                  <input 
+                    id="shoulder-pain-{exercise.id}"
+                    type="number" 
+                    min="0" 
+                    max="10" 
+                    value={exercise.left_shoulder_pain || 0}
+                    on:input={(e) => updatePain(exercise.id, 'left_shoulder_pain', e.target.value)}
+                    class="pain-input"
+                    class:has-pain={(exercise.left_shoulder_pain || 0) > 0}
+                  />
+                </div>
+                <div class="pain-field">
+                  <label for="elbow-pain-{exercise.id}">Elbow</label>
+                  <input 
+                    id="elbow-pain-{exercise.id}"
+                    type="number" 
+                    min="0" 
+                    max="10" 
+                    value={exercise.elbow_pain || 0}
+                    on:input={(e) => updatePain(exercise.id, 'elbow_pain', e.target.value)}
+                    class="pain-input"
+                    class:has-pain={(exercise.elbow_pain || 0) > 0}
+                  />
+                </div>
+              </div>
+              {#if ((exercise.left_shoulder_pain || 0) > 0 || (exercise.elbow_pain || 0) > 0) && exerciseSubstitutions[exercise.name]?.length > 0}
+                <div class="substitution-suggestions">
+                  <span class="subs-label">Try instead:</span>
+                  {#each exerciseSubstitutions[exercise.name] as sub}
+                    <button 
+                      type="button" 
+                      class="sub-chip"
+                      on:click={() => {
+                        addExercise(sub, exercise.muscleGroup);
+                      }}
+                    >
+                      {sub}
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+            
             <div class="exercise-actions">
               <button type="button" class="add-set-btn" on:click={() => addSet(exercise.id)}>
                 + Add Set
@@ -851,6 +928,11 @@
             </div>
             <span class="pill-stats">
               {calculateTotalReps(exercise.sets)} reps • {calculateTotalVolume(exercise.sets).toLocaleString('en-US', { maximumFractionDigits: 0 })} lbs
+              {#if (exercise.left_shoulder_pain || 0) > 0 || (exercise.elbow_pain || 0) > 0}
+                <span class="pill-pain">
+                  ⚠️ {#if exercise.left_shoulder_pain}S:{exercise.left_shoulder_pain}{/if}{#if exercise.left_shoulder_pain && exercise.elbow_pain} {/if}{#if exercise.elbow_pain}E:{exercise.elbow_pain}{/if}
+                </span>
+              {/if}
             </span>
           </div>
           <button
@@ -1535,6 +1617,12 @@
     line-height: 1.2;
   }
   
+  .pill-pain {
+    color: #f87171;
+    font-weight: 600;
+    margin-left: var(--spacing-xs);
+  }
+  
   
   .custom-exercise-section {
     padding: var(--spacing-md);
@@ -1711,5 +1799,87 @@
   .save-custom-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+  
+  /* Pain tracking styles */
+  .pain-tracking {
+    margin-top: var(--spacing-md);
+    padding-top: var(--spacing-md);
+    border-top: 1px dashed var(--border);
+  }
+  
+  .pain-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--spacing-xs);
+  }
+  
+  .pain-inputs {
+    display: flex;
+    gap: var(--spacing-md);
+  }
+  
+  .pain-field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  
+  .pain-field label {
+    font-size: 0.6875rem;
+    color: var(--text-muted);
+  }
+  
+  .pain-input {
+    width: 50px;
+    padding: var(--spacing-xs);
+    text-align: center;
+    font-size: 0.875rem;
+    border: 1px solid var(--border);
+    border-radius: var(--border-radius-sm);
+    background: var(--surface);
+    color: var(--text-primary);
+  }
+  
+  .pain-input.has-pain {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+    color: #f87171;
+  }
+  
+  .substitution-suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--spacing-xs);
+    margin-top: var(--spacing-sm);
+    padding: var(--spacing-xs);
+    background: rgba(59, 130, 246, 0.05);
+    border-radius: var(--border-radius-sm);
+  }
+  
+  .subs-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--primary-color);
+  }
+  
+  .sub-chip {
+    padding: 2px 8px;
+    background: var(--surface-elevated);
+    border: 1px solid var(--primary-color);
+    border-radius: 12px;
+    color: var(--primary-color);
+    font-size: 0.6875rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .sub-chip:hover {
+    background: var(--primary-color);
+    color: white;
   }
 </style>
