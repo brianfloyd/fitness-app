@@ -12,6 +12,8 @@
   import FoodTracker from './FoodTracker.svelte';
   import FitbitDailyMetrics from './FitbitDailyMetrics.svelte';
   import NutritionProgress from './NutritionProgress.svelte';
+  import WeeklyCheckIn from './WeeklyCheckIn.svelte';
+  import CoachChat from './CoachChat.svelte';
 
   export let mobileView = undefined;
   $: isMobile = mobileView != null;
@@ -116,13 +118,9 @@
   let foods = []; // Array of food entries
   let foodMacros = { protein: 0, fat: 0, carbs: 0, calories: 0 }; // Macros from foods
   
-  // Calculate total calories from foods only
-  $: totalCalories = (() => {
-    const p = foodMacros.protein || 0;
-    const f = foodMacros.fat || 0;
-    const c = foodMacros.carbs || 0;
-    return (p * 4) + (f * 9) + (c * 4);
-  })();
+  // Use reported calories from foodMacros directly (MacroFactor-style)
+  // Don't recalculate from macros since that ignores Atwater-specific factors
+  $: totalCalories = foodMacros.calories || 0;
   
   // Calculate nutrition progress status
   $: calorieStatus = (() => {
@@ -201,6 +199,10 @@
   let fitbitSteps = null; // Fitbit steps for header (fetched when connected)
   let fitbitZoneMinutes = null; // Active zone minutes from Fitbit
   let fitbitCaloriesOut = null; // Calories expended from Fitbit
+  
+  // Weekly check-in and coach modals
+  let showWeeklyCheckIn = false;
+  let showCoachChat = false;
   
   // Copy to functionality
   let showCopyModal = false;
@@ -1002,6 +1004,18 @@
     <!-- Desktop layout -->
     <DayCounter {dayNumber} {totalDays} onPrevious={navigateToPreviousDay} onNext={navigateToNextDay} volume={totalWorkoutVolume} calories={totalCalories} caloriesExpended={headerCaloriesExpended} protein={foodMacros.protein || 0} zoneMinutes={headerZoneMinutes} steps={headerSteps} {programPhase} />
     
+    <!-- Quick action buttons -->
+    <div class="quick-actions">
+      <button type="button" class="quick-action-btn" on:click={() => showWeeklyCheckIn = true} title="Weekly Check-In">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+        <span>Weekly</span>
+      </button>
+      <button type="button" class="quick-action-btn" on:click={() => showCoachChat = true} title="AI Coach">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+        <span>Coach</span>
+      </button>
+    </div>
+    
     <div class="form-layout">
         <!-- Left Column: Photo, Date, Body Composition, and Sleep -->
         <div class="left-column">
@@ -1315,6 +1329,24 @@
         category={graphCategory} 
         on:close={closeGraphModal}
       />
+    </div>
+  </div>
+{/if}
+
+<!-- Weekly Check-In Modal -->
+{#if showWeeklyCheckIn}
+  <div class="modal-overlay" role="dialog" aria-modal="true" aria-label="Weekly check-in" on:click|self={() => showWeeklyCheckIn = false} on:keydown={(e) => e.key === 'Escape' && (showWeeklyCheckIn = false)}>
+    <div class="modal-content wide">
+      <WeeklyCheckIn on:close={() => showWeeklyCheckIn = false} />
+    </div>
+  </div>
+{/if}
+
+<!-- Coach Chat Modal -->
+{#if showCoachChat}
+  <div class="modal-overlay" role="dialog" aria-modal="true" aria-label="AI Coach" on:click|self={() => showCoachChat = false} on:keydown={(e) => e.key === 'Escape' && (showCoachChat = false)}>
+    <div class="modal-content wide">
+      <CoachChat on:close={() => showCoachChat = false} />
     </div>
   </div>
 {/if}
@@ -2118,5 +2150,96 @@
   .mobile-view-card :global(.form-section) {
     padding: var(--spacing-sm);
     padding-bottom: calc(var(--spacing-xl) + 20px);
+  }
+
+  /* Quick action buttons */
+  .quick-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+    justify-content: flex-end;
+    margin-bottom: var(--spacing-md);
+    padding: 0 var(--spacing-sm);
+  }
+
+  .quick-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--border-radius-sm);
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .quick-action-btn:hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+    border-color: var(--primary);
+  }
+
+  .quick-action-btn svg {
+    flex-shrink: 0;
+  }
+
+  /* Modal overlay for WeeklyCheckIn and CoachChat */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: var(--spacing-md);
+  }
+
+  .modal-content {
+    background: var(--surface);
+    border-radius: var(--border-radius-lg);
+    max-height: 90vh;
+    overflow: auto;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+  }
+
+  .modal-content.wide {
+    width: 100%;
+    max-width: 600px;
+  }
+
+  @media (max-width: 768px) {
+    .quick-actions {
+      position: fixed;
+      bottom: calc(60px + env(safe-area-inset-bottom));
+      right: var(--spacing-sm);
+      flex-direction: column;
+      z-index: 50;
+      margin: 0;
+      padding: 0;
+    }
+
+    .quick-action-btn span {
+      display: none;
+    }
+
+    .quick-action-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .modal-content.wide {
+      max-width: 100%;
+      max-height: 85vh;
+      border-radius: var(--border-radius-md);
+    }
   }
 </style>

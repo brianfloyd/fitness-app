@@ -1,7 +1,8 @@
+import { mount } from 'svelte';
 import App from './App.svelte';
 import './app.css';
 
-// Ensure DOM is ready before initializing
+// Ensure DOM is ready before initializing (Svelte 5 mount API)
 let app;
 try {
   const appElement = document.getElementById('app');
@@ -9,7 +10,8 @@ try {
     throw new Error('App element not found');
   }
   
-  app = new App({
+  // Svelte 5 uses mount() instead of new Component()
+  app = mount(App, {
     target: appElement,
   });
   

@@ -1,11 +1,14 @@
 /**
  * MCP Server for Fitness App
  * 
+ * Implements the Model Context Protocol (MCP) with Streamable HTTP transport.
  * Provides tools for AI assistants to log food, workouts, and body metrics.
- * Authenticates via per-profile API token (Bearer token).
  * 
- * Deploy as: Railway HTTP endpoint
- * Connect as: Remote MCP server with Bearer token auth
+ * Protocol: JSON-RPC 2.0 over HTTP (Streamable HTTP transport)
+ * Auth: Per-profile Bearer token
+ * 
+ * Deploy as: Railway HTTP endpoint at /api/mcp
+ * Connect as: Remote MCP server with URL + Authorization: Bearer header
  */
 
 import express from 'express';
@@ -14,8 +17,10 @@ import pool from '../db/connection.js';
 
 const router = express.Router();
 
-// MCP Protocol version
-const MCP_VERSION = '1.0';
+// MCP Protocol constants
+const MCP_VERSION = '2024-11-05';
+const SERVER_NAME = 'fitness-tracker-mcp';
+const SERVER_VERSION = '1.0.0';
 
 /**
  * Token authentication middleware
@@ -26,14 +31,19 @@ async function authenticateToken(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({
-      error: 'Missing or invalid Authorization header',
-      hint: 'Use: Authorization: Bearer <your-api-token>',
+      jsonrpc: '2.0',
+      error: { code: -32600, message: 'Missing or invalid Authorization header. Use: Authorization: Bearer <your-api-token>' },
+      id: null,
     });
   }
   
   const token = authHeader.substring(7);
   if (!token) {
-    return res.status(401).json({ error: 'Empty token' });
+    return res.status(401).json({
+      jsonrpc: '2.0',
+      error: { code: -32600, message: 'Empty token' },
+      id: null,
+    });
   }
   
   try {
@@ -50,181 +60,302 @@ async function authenticateToken(req, res, next) {
       }
     }
     
-    return res.status(401).json({ error: 'Invalid API token' });
+    return res.status(401).json({
+      jsonrpc: '2.0',
+      error: { code: -32600, message: 'Invalid API token' },
+      id: null,
+    });
   } catch (err) {
     console.error('Token auth error:', err);
-    return res.status(500).json({ error: 'Authentication failed' });
+    return res.status(500).json({
+      jsonrpc: '2.0',
+      error: { code: -32603, message: 'Authentication failed' },
+      id: null,
+    });
   }
 }
 
-// Apply authentication to all MCP routes
-router.use(authenticateToken);
-
-/**
- * GET /mcp/tools
- * List available MCP tools
- */
-router.get('/tools', (req, res) => {
-  res.json({
-    version: MCP_VERSION,
-    tools: [
-      {
-        name: 'search_food',
-        description: 'Search for foods by name or barcode. Returns matching foods from USDA database and custom foods.',
-        parameters: {
-          query: { type: 'string', description: 'Food name to search for', required: false },
-          barcode: { type: 'string', description: 'Barcode (GTIN/UPC) to search for', required: false },
-        },
+// Tool definitions for MCP
+const TOOLS = [
+  {
+    name: 'search_food',
+    description: 'Search for foods by name or barcode. Returns matching foods from USDA database and custom foods.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Food name to search for' },
+        barcode: { type: 'string', description: 'Barcode (GTIN/UPC) to search for' },
       },
-      {
-        name: 'log_food',
-        description: 'Log a food entry for a specific date. Can search and log in one call.',
-        parameters: {
-          date: { type: 'string', description: 'Date in YYYY-MM-DD format (defaults to today)', required: false },
-          food_name: { type: 'string', description: 'Name or description of the food', required: true },
-          quantity: { type: 'number', description: 'Amount of food', required: true },
-          unit: { type: 'string', description: 'Unit (g, oz, serving, cup, etc.)', required: false, default: 'g' },
-          meal: { type: 'string', description: 'Meal type (breakfast, lunch, dinner, snack)', required: false },
-          calories: { type: 'number', description: 'Override calories (optional)', required: false },
-          protein: { type: 'number', description: 'Override protein in grams (optional)', required: false },
-          fat: { type: 'number', description: 'Override fat in grams (optional)', required: false },
-          carbs: { type: 'number', description: 'Override carbs in grams (optional)', required: false },
-        },
+    },
+  },
+  {
+    name: 'log_food',
+    description: 'Log a food entry for a specific date. Can search and log in one call.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', description: 'Date in YYYY-MM-DD format (defaults to today)' },
+        food_name: { type: 'string', description: 'Name or description of the food' },
+        quantity: { type: 'number', description: 'Amount of food' },
+        unit: { type: 'string', description: 'Unit (g, oz, serving, cup, etc.)', default: 'g' },
+        meal: { type: 'string', description: 'Meal type (breakfast, lunch, dinner, snack)' },
+        calories: { type: 'number', description: 'Override calories (optional)' },
+        protein: { type: 'number', description: 'Override protein in grams (optional)' },
+        fat: { type: 'number', description: 'Override fat in grams (optional)' },
+        carbs: { type: 'number', description: 'Override carbs in grams (optional)' },
       },
-      {
-        name: 'get_daily_nutrition',
-        description: 'Get nutrition summary for a specific date',
-        parameters: {
-          date: { type: 'string', description: 'Date in YYYY-MM-DD format (defaults to today)', required: false },
-        },
+      required: ['food_name', 'quantity'],
+    },
+  },
+  {
+    name: 'get_daily_nutrition',
+    description: 'Get nutrition summary for a specific date',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', description: 'Date in YYYY-MM-DD format (defaults to today)' },
       },
-      {
-        name: 'list_food_entries',
-        description: 'List all food entries for a specific date',
-        parameters: {
-          date: { type: 'string', description: 'Date in YYYY-MM-DD format (defaults to today)', required: false },
-        },
+    },
+  },
+  {
+    name: 'list_food_entries',
+    description: 'List all food entries for a specific date',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', description: 'Date in YYYY-MM-DD format (defaults to today)' },
       },
-      {
-        name: 'update_food_entry',
-        description: 'Update a specific food entry',
-        parameters: {
-          date: { type: 'string', description: 'Date in YYYY-MM-DD format', required: true },
-          entry_index: { type: 'number', description: 'Index of the food entry to update (0-based)', required: true },
-          quantity: { type: 'number', description: 'New amount', required: false },
-          unit: { type: 'string', description: 'New unit', required: false },
-        },
+    },
+  },
+  {
+    name: 'update_food_entry',
+    description: 'Update a specific food entry',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', description: 'Date in YYYY-MM-DD format' },
+        entry_index: { type: 'number', description: 'Index of the food entry to update (0-based)' },
+        quantity: { type: 'number', description: 'New amount' },
+        unit: { type: 'string', description: 'New unit' },
       },
-      {
-        name: 'delete_food_entry',
-        description: 'Delete a specific food entry',
-        parameters: {
-          date: { type: 'string', description: 'Date in YYYY-MM-DD format', required: true },
-          entry_index: { type: 'number', description: 'Index of the food entry to delete (0-based)', required: true },
-        },
+      required: ['date', 'entry_index'],
+    },
+  },
+  {
+    name: 'delete_food_entry',
+    description: 'Delete a specific food entry',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', description: 'Date in YYYY-MM-DD format' },
+        entry_index: { type: 'number', description: 'Index of the food entry to delete (0-based)' },
       },
-      {
-        name: 'log_weight',
-        description: 'Log weight and optional waist measurement',
-        parameters: {
-          date: { type: 'string', description: 'Date in YYYY-MM-DD format (defaults to today)', required: false },
-          weight: { type: 'number', description: 'Weight in pounds', required: true },
-          waist: { type: 'number', description: 'Waist measurement in inches (optional)', required: false },
-        },
+      required: ['date', 'entry_index'],
+    },
+  },
+  {
+    name: 'log_weight',
+    description: 'Log weight and optional waist measurement',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', description: 'Date in YYYY-MM-DD format (defaults to today)' },
+        weight: { type: 'number', description: 'Weight in pounds' },
+        waist: { type: 'number', description: 'Waist measurement in inches (optional)' },
       },
-      {
-        name: 'log_workout',
-        description: 'Log a workout with exercises',
-        parameters: {
-          date: { type: 'string', description: 'Date in YYYY-MM-DD format (defaults to today)', required: false },
-          exercises: {
-            type: 'array',
-            description: 'Array of exercises',
-            items: {
+      required: ['weight'],
+    },
+  },
+  {
+    name: 'log_workout',
+    description: 'Log a workout with exercises',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', description: 'Date in YYYY-MM-DD format (defaults to today)' },
+        exercises: {
+          type: 'array',
+          description: 'Array of exercises',
+          items: {
+            type: 'object',
+            properties: {
               name: { type: 'string', description: 'Exercise name' },
               muscle_group: { type: 'string', description: 'Muscle group (Biceps, Triceps, Chest, Back, Shoulders, Legs, Core, Forearms)' },
               sets: {
                 type: 'array',
                 items: {
-                  weight: { type: 'number', description: 'Weight in lbs' },
-                  reps: { type: 'number', description: 'Number of reps' },
+                  type: 'object',
+                  properties: {
+                    weight: { type: 'number', description: 'Weight in lbs' },
+                    reps: { type: 'number', description: 'Number of reps' },
+                  },
                 },
               },
             },
-            required: true,
           },
         },
       },
-      {
-        name: 'log_skate_session',
-        description: 'Log a skateboard training session',
-        parameters: {
-          date: { type: 'string', description: 'Date in YYYY-MM-DD format (defaults to today)', required: false },
-          session_type: { type: 'string', description: 'Type: ldp, scogging, freestyle, long_session, switch_practice', required: true },
-          distance_miles: { type: 'number', description: 'Distance in miles', required: false },
-          duration_minutes: { type: 'number', description: 'Duration in minutes', required: false },
-          switch_foot_minutes: { type: 'number', description: 'Minutes on switch foot', required: false },
-          weak_side_comfort: { type: 'number', description: 'Comfort level 1-10', required: false },
-          notes: { type: 'string', description: 'Session notes', required: false },
-        },
+      required: ['exercises'],
+    },
+  },
+  {
+    name: 'log_skate_session',
+    description: 'Log a skateboard training session',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', description: 'Date in YYYY-MM-DD format (defaults to today)' },
+        session_type: { type: 'string', description: 'Type: ldp, scogging, freestyle, long_session, switch_practice' },
+        distance_miles: { type: 'number', description: 'Distance in miles' },
+        duration_minutes: { type: 'number', description: 'Duration in minutes' },
+        switch_foot_minutes: { type: 'number', description: 'Minutes on switch foot' },
+        weak_side_comfort: { type: 'number', description: 'Comfort level 1-10' },
+        notes: { type: 'string', description: 'Session notes' },
       },
-    ],
-  });
-});
+      required: ['session_type'],
+    },
+  },
+];
+
+// Apply authentication to all MCP routes
+router.use(authenticateToken);
 
 /**
- * POST /mcp/call
- * Execute an MCP tool
+ * POST /api/mcp
+ * Main MCP endpoint - handles JSON-RPC requests
+ * Supports: initialize, tools/list, tools/call
  */
-router.post('/call', async (req, res) => {
-  const { tool, parameters } = req.body;
-  const profileId = req.profileId;
+router.post('/', async (req, res) => {
+  const { jsonrpc, method, params, id } = req.body;
   
-  if (!tool) {
-    return res.status(400).json({ error: 'Tool name is required' });
+  // Validate JSON-RPC format
+  if (jsonrpc !== '2.0') {
+    return res.status(400).json({
+      jsonrpc: '2.0',
+      error: { code: -32600, message: 'Invalid Request: jsonrpc must be "2.0"' },
+      id: id || null,
+    });
+  }
+  
+  if (!method) {
+    return res.status(400).json({
+      jsonrpc: '2.0',
+      error: { code: -32600, message: 'Invalid Request: method is required' },
+      id: id || null,
+    });
   }
   
   try {
     let result;
     
-    switch (tool) {
-      case 'search_food':
-        result = await searchFood(profileId, parameters);
+    switch (method) {
+      case 'initialize':
+        result = handleInitialize(params);
         break;
-      case 'log_food':
-        result = await logFood(profileId, parameters);
+      case 'tools/list':
+        result = handleToolsList();
         break;
-      case 'get_daily_nutrition':
-        result = await getDailyNutrition(profileId, parameters);
+      case 'tools/call':
+        result = await handleToolsCall(req.profileId, params);
         break;
-      case 'list_food_entries':
-        result = await listFoodEntries(profileId, parameters);
-        break;
-      case 'update_food_entry':
-        result = await updateFoodEntry(profileId, parameters);
-        break;
-      case 'delete_food_entry':
-        result = await deleteFoodEntry(profileId, parameters);
-        break;
-      case 'log_weight':
-        result = await logWeight(profileId, parameters);
-        break;
-      case 'log_workout':
-        result = await logWorkout(profileId, parameters);
-        break;
-      case 'log_skate_session':
-        result = await logSkateSession(profileId, parameters);
-        break;
+      case 'notifications/initialized':
+        // Client notification - acknowledge but no response needed
+        return res.json({ jsonrpc: '2.0', result: {}, id });
       default:
-        return res.status(400).json({ error: `Unknown tool: ${tool}` });
+        return res.status(400).json({
+          jsonrpc: '2.0',
+          error: { code: -32601, message: `Method not found: ${method}` },
+          id,
+        });
     }
     
-    res.json({ result });
+    res.json({ jsonrpc: '2.0', result, id });
   } catch (err) {
-    console.error(`MCP tool error (${tool}):`, err);
-    res.status(500).json({ error: err.message || 'Tool execution failed' });
+    console.error(`MCP error (${method}):`, err);
+    res.status(500).json({
+      jsonrpc: '2.0',
+      error: { code: -32603, message: err.message || 'Internal error' },
+      id,
+    });
   }
 });
+
+/**
+ * Handle initialize request
+ */
+function handleInitialize(params) {
+  return {
+    protocolVersion: MCP_VERSION,
+    capabilities: {
+      tools: {},
+    },
+    serverInfo: {
+      name: SERVER_NAME,
+      version: SERVER_VERSION,
+    },
+  };
+}
+
+/**
+ * Handle tools/list request
+ */
+function handleToolsList() {
+  return { tools: TOOLS };
+}
+
+/**
+ * Handle tools/call request
+ */
+async function handleToolsCall(profileId, params) {
+  const { name, arguments: args } = params || {};
+  
+  if (!name) {
+    throw new Error('Tool name is required');
+  }
+  
+  let result;
+  
+  switch (name) {
+    case 'search_food':
+      result = await searchFood(profileId, args);
+      break;
+    case 'log_food':
+      result = await logFood(profileId, args);
+      break;
+    case 'get_daily_nutrition':
+      result = await getDailyNutrition(profileId, args);
+      break;
+    case 'list_food_entries':
+      result = await listFoodEntries(profileId, args);
+      break;
+    case 'update_food_entry':
+      result = await updateFoodEntry(profileId, args);
+      break;
+    case 'delete_food_entry':
+      result = await deleteFoodEntry(profileId, args);
+      break;
+    case 'log_weight':
+      result = await logWeight(profileId, args);
+      break;
+    case 'log_workout':
+      result = await logWorkout(profileId, args);
+      break;
+    case 'log_skate_session':
+      result = await logSkateSession(profileId, args);
+      break;
+    default:
+      throw new Error(`Unknown tool: ${name}`);
+  }
+  
+  return {
+    content: [
+      {
+        type: 'text',
+        text: JSON.stringify(result, null, 2),
+      },
+    ],
+  };
+}
 
 // Helper: get today's date in YYYY-MM-DD format (server timezone)
 function getToday() {
@@ -544,9 +675,6 @@ async function updateFoodEntry(profileId, params) {
   
   if (quantity !== undefined) entry.amount = quantity;
   if (unit !== undefined) entry.unit = unit;
-  
-  // Recalculate macros if we have food data
-  // For now, just update amount/unit
   
   await pool.query(
     'UPDATE daily_logs SET foods = $1, updated_at = CURRENT_TIMESTAMP WHERE profile_id = $2 AND date = $3',

@@ -8,9 +8,11 @@ const router = express.Router();
 router.use(requireProfileId);
 
 // Environment variables for LLM configuration (OpenAI-compatible, works with xAI Grok)
-const COACH_API_KEY = process.env.COACH_API_KEY;
+// Fallback chain: COACH_API_KEY -> OPENAI_API_KEY
+const COACH_API_KEY = process.env.COACH_API_KEY || process.env.OPENAI_API_KEY;
 const COACH_BASE_URL = process.env.COACH_BASE_URL || 'https://api.openai.com/v1';
 const COACH_MODEL = process.env.COACH_MODEL || 'gpt-4o';
+const COACH_PROVIDER = process.env.COACH_API_KEY ? 'custom' : (process.env.OPENAI_API_KEY ? 'openai' : 'none');
 
 // Exercise substitution suggestions for shoulder/elbow issues
 const EXERCISE_SUBSTITUTIONS = {
@@ -51,7 +53,11 @@ router.get('/status', (req, res) => {
   res.json({
     available: configured,
     model: configured ? COACH_MODEL : null,
-    message: configured ? 'AI Coach is ready' : 'AI Coach not configured. Set COACH_API_KEY environment variable.',
+    provider: configured ? COACH_PROVIDER : null,
+    base_url: configured ? COACH_BASE_URL : null,
+    message: configured
+      ? `AI Coach is ready (${COACH_PROVIDER === 'openai' ? 'OpenAI' : 'custom provider'})`
+      : 'AI Coach not configured. Set COACH_API_KEY (or OPENAI_API_KEY as fallback), optionally COACH_BASE_URL and COACH_MODEL.',
   });
 });
 
@@ -99,13 +105,31 @@ router.get('/weekly-summary', async (req, res) => {
     const logs = logsResult.rows;
     const weights = logs.filter(l => l.weight).map(l => parseFloat(l.weight));
     const waists = logs.filter(l => l.waist).map(l => parseFloat(l.waist));
-    const proteins = logs.filter(l => l.protein).map(l => parseFloat(l.protein));
-    const calories = logs.map(l => {
-      const p = parseFloat(l.protein) || 0;
-      const f = parseFloat(l.fat) || 0;
-      const c = parseFloat(l.carbs) || 0;
-      return (p * 4) + (f * 9) + (c * 4);
-    }).filter(c => c > 0);
+    
+    // Calculate calories and protein from foods JSON (MacroFactor-style: use stored calories)
+    const caloriesAndProtein = logs.map(l => {
+      let totalCal = 0;
+      let totalProtein = 0;
+      if (l.foods) {
+        try {
+          const foods = JSON.parse(l.foods);
+          if (Array.isArray(foods)) {
+            for (const f of foods) {
+              totalCal += parseFloat(f.calories) || 0;
+              totalProtein += parseFloat(f.protein) || 0;
+            }
+          }
+        } catch (e) {
+          // Fallback to column values if foods JSON is invalid
+          totalCal = ((parseFloat(l.protein) || 0) * 4) + ((parseFloat(l.fat) || 0) * 9) + ((parseFloat(l.carbs) || 0) * 4);
+          totalProtein = parseFloat(l.protein) || 0;
+        }
+      }
+      return { calories: totalCal, protein: totalProtein };
+    });
+    
+    const calories = caloriesAndProtein.map(c => c.calories).filter(c => c > 0);
+    const proteins = caloriesAndProtein.map(c => c.protein).filter(p => p > 0);
     
     // Parse workouts for pain data and volume
     let totalVolume = 0;
@@ -231,7 +255,7 @@ router.post('/chat', async (req, res) => {
     if (!COACH_API_KEY) {
       return res.status(503).json({
         error: 'AI Coach not configured',
-        message: 'Set COACH_API_KEY, COACH_BASE_URL, and COACH_MODEL environment variables to enable the AI coach.',
+        message: 'Set COACH_API_KEY (or OPENAI_API_KEY as fallback). Optionally set COACH_BASE_URL (e.g. https://api.x.ai/v1 for xAI Grok) and COACH_MODEL.',
       });
     }
     
@@ -265,7 +289,24 @@ router.post('/chat', async (req, res) => {
     
     // Build context for the AI
     const logsContext = logsResult.rows.map(log => {
-      const cals = ((parseFloat(log.protein) || 0) * 4) + ((parseFloat(log.fat) || 0) * 9) + ((parseFloat(log.carbs) || 0) * 4);
+      // Calculate calories from foods JSON (MacroFactor-style: use stored calories)
+      let cals = 0;
+      let protein = 0;
+      if (log.foods) {
+        try {
+          const foods = JSON.parse(log.foods);
+          if (Array.isArray(foods)) {
+            for (const f of foods) {
+              cals += parseFloat(f.calories) || 0;
+              protein += parseFloat(f.protein) || 0;
+            }
+          }
+        } catch (e) {
+          // Fallback to column values
+          cals = ((parseFloat(log.protein) || 0) * 4) + ((parseFloat(log.fat) || 0) * 9) + ((parseFloat(log.carbs) || 0) * 4);
+          protein = parseFloat(log.protein) || 0;
+        }
+      }
       let workoutSummary = '';
       let painSummary = '';
       
@@ -302,7 +343,7 @@ router.post('/chat', async (req, res) => {
         weight: log.weight,
         waist: log.waist,
         calories: Math.round(cals) || null,
-        protein: log.protein,
+        protein: Math.round(protein * 10) / 10 || null,
         workout: workoutSummary || null,
         pain: painSummary || null,
         skating: skateSummary || null,

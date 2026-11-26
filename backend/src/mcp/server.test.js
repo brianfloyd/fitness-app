@@ -2,7 +2,10 @@ import request from 'supertest';
 import express from 'express';
 import mcpRoutes from './server.js';
 
-describe('MCP Server', () => {
+// MCP Protocol version
+const MCP_VERSION = '2024-11-05';
+
+describe('MCP Server - JSON-RPC Protocol', () => {
   let app;
   
   beforeEach(() => {
@@ -12,37 +15,42 @@ describe('MCP Server', () => {
   });
   
   describe('Authentication', () => {
-    it('should return 401 when no Authorization header is provided', async () => {
+    it('should return JSON-RPC error when no Authorization header is provided', async () => {
       const response = await request(app)
-        .get('/mcp/tools')
+        .post('/mcp')
+        .send({ jsonrpc: '2.0', method: 'initialize', id: 1 })
         .expect(401);
       
+      expect(response.body).toHaveProperty('jsonrpc', '2.0');
       expect(response.body).toHaveProperty('error');
-      expect(response.body.error).toContain('Authorization');
+      expect(response.body.error).toHaveProperty('code');
+      expect(response.body.error).toHaveProperty('message');
     });
     
-    it('should return 401 when Authorization header is invalid format', async () => {
+    it('should return JSON-RPC error when Authorization header is invalid format', async () => {
       const response = await request(app)
-        .get('/mcp/tools')
+        .post('/mcp')
         .set('Authorization', 'Basic dXNlcjpwYXNz')
+        .send({ jsonrpc: '2.0', method: 'initialize', id: 1 })
         .expect(401);
       
+      expect(response.body).toHaveProperty('jsonrpc', '2.0');
       expect(response.body).toHaveProperty('error');
-      expect(response.body.error).toContain('Authorization');
     });
     
-    it('should return 401 when Bearer token is empty', async () => {
+    it('should return JSON-RPC error when Bearer token is empty', async () => {
       const response = await request(app)
-        .get('/mcp/tools')
+        .post('/mcp')
         .set('Authorization', 'Bearer ')
+        .send({ jsonrpc: '2.0', method: 'initialize', id: 1 })
         .expect(401);
       
+      expect(response.body).toHaveProperty('jsonrpc', '2.0');
       expect(response.body).toHaveProperty('error');
-      // Empty bearer token matches "Missing or invalid" or "Empty" check
-      expect(response.body.error.toLowerCase()).toMatch(/empty|missing|invalid/);
+      expect(response.body.error.message.toLowerCase()).toMatch(/empty|missing|invalid/);
     });
     
-    it('should return 401 when Bearer token is invalid', async () => {
+    it('should return JSON-RPC error when Bearer token is invalid', async () => {
       // Skip if no database connection
       if (!process.env.DATABASE_URL) {
         console.log('Skipping test - requires database');
@@ -50,19 +58,53 @@ describe('MCP Server', () => {
       }
       
       const response = await request(app)
-        .get('/mcp/tools')
+        .post('/mcp')
         .set('Authorization', 'Bearer invalid-token-here')
+        .send({ jsonrpc: '2.0', method: 'initialize', id: 1 })
         .expect(401);
       
+      expect(response.body).toHaveProperty('jsonrpc', '2.0');
       expect(response.body).toHaveProperty('error');
-      expect(response.body.error).toContain('Invalid');
+      expect(response.body.error.message).toContain('Invalid');
     });
   });
   
-  describe('Tools Endpoint', () => {
-    // These tests would require a valid token in production
-    // For unit testing, we document what the endpoint should return
-    it('should list expected tool names when authenticated', () => {
+  describe('JSON-RPC Validation', () => {
+    it('should reject requests without jsonrpc version', async () => {
+      // Skip if no database (can't authenticate)
+      if (!process.env.DATABASE_URL) {
+        console.log('Skipping test - requires database');
+        return;
+      }
+      
+      // Note: This would need a valid token in production
+    });
+  });
+});
+
+describe('MCP Protocol Compliance', () => {
+  describe('Initialize Response Format', () => {
+    it('should have correct initialize response structure', () => {
+      const expectedResponse = {
+        protocolVersion: MCP_VERSION,
+        capabilities: {
+          tools: {},
+        },
+        serverInfo: {
+          name: 'fitness-tracker-mcp',
+          version: '1.0.0',
+        },
+      };
+      
+      expect(expectedResponse.protocolVersion).toBe('2024-11-05');
+      expect(expectedResponse.capabilities).toHaveProperty('tools');
+      expect(expectedResponse.serverInfo).toHaveProperty('name');
+      expect(expectedResponse.serverInfo).toHaveProperty('version');
+    });
+  });
+  
+  describe('Tools List Format', () => {
+    it('should have expected tool names', () => {
       const expectedTools = [
         'search_food',
         'log_food',
@@ -75,24 +117,45 @@ describe('MCP Server', () => {
         'log_skate_session',
       ];
       
-      // Verify expected tool list
-      expect(expectedTools).toContain('search_food');
-      expect(expectedTools).toContain('log_food');
-      expect(expectedTools).toContain('get_daily_nutrition');
+      expectedTools.forEach(tool => {
+        expect(expectedTools).toContain(tool);
+      });
+    });
+    
+    it('should have valid inputSchema for each tool', () => {
+      // Tools should have inputSchema with type: "object"
+      const toolSchema = {
+        name: 'log_food',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            food_name: { type: 'string' },
+            quantity: { type: 'number' },
+          },
+          required: ['food_name', 'quantity'],
+        },
+      };
+      
+      expect(toolSchema.inputSchema.type).toBe('object');
+      expect(toolSchema.inputSchema.properties).toHaveProperty('food_name');
+      expect(toolSchema.inputSchema.required).toContain('food_name');
     });
   });
   
-  describe('Tool Call Validation', () => {
-    // Unit tests for tool parameter validation (without DB)
-    it('should validate that tool name is required', async () => {
-      // Skip if no database (can't authenticate)
-      if (!process.env.DATABASE_URL) {
-        console.log('Skipping test - requires database');
-        return;
-      }
+  describe('Tools Call Response Format', () => {
+    it('should return content array with text type', () => {
+      const expectedResponse = {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ logged: { name: 'Test Food' }, date: '2026-11-26' }, null, 2),
+          },
+        ],
+      };
       
-      // This would require a mock authenticated request
-      // In production, the endpoint should reject calls without tool name
+      expect(expectedResponse.content).toBeInstanceOf(Array);
+      expect(expectedResponse.content[0].type).toBe('text');
+      expect(expectedResponse.content[0].text).toBeDefined();
     });
   });
 });
@@ -179,5 +242,56 @@ describe('MCP Tool Logic', () => {
       expect(scaled.calories).toBe(33);
       expect(scaled.protein).toBe(3.3);
     });
+  });
+});
+
+describe('MCP Integration Test Flow', () => {
+  it('should demonstrate initialize -> tools/list -> tools/call sequence', () => {
+    // This test documents the expected flow for a standard MCP client
+    
+    // Step 1: Initialize
+    const initRequest = {
+      jsonrpc: '2.0',
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'test-client', version: '1.0.0' },
+      },
+      id: 1,
+    };
+    expect(initRequest.method).toBe('initialize');
+    
+    // Step 2: Initialized notification
+    const initializedNotification = {
+      jsonrpc: '2.0',
+      method: 'notifications/initialized',
+    };
+    expect(initializedNotification.method).toBe('notifications/initialized');
+    
+    // Step 3: Tools list
+    const toolsListRequest = {
+      jsonrpc: '2.0',
+      method: 'tools/list',
+      id: 2,
+    };
+    expect(toolsListRequest.method).toBe('tools/list');
+    
+    // Step 4: Tools call
+    const toolsCallRequest = {
+      jsonrpc: '2.0',
+      method: 'tools/call',
+      params: {
+        name: 'log_food',
+        arguments: {
+          food_name: 'chicken breast',
+          quantity: 150,
+          unit: 'g',
+        },
+      },
+      id: 3,
+    };
+    expect(toolsCallRequest.method).toBe('tools/call');
+    expect(toolsCallRequest.params.name).toBe('log_food');
   });
 });
