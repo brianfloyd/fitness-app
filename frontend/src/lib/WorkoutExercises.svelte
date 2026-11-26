@@ -1,10 +1,17 @@
 <script>
   import { createEventDispatcher, onMount } from 'svelte';
   import { getRecentLogs, getExerciseSubstitutions } from '../lib/api.js';
+  import PainSwapModal from './PainSwapModal.svelte';
   
   export let exercises = []; // Array of { id, name, muscleGroup, sets: [{ id, weight, reps }], completed: boolean, left_shoulder_pain: 0-10, elbow_pain: 0-10 }
   
   const dispatch = createEventDispatcher();
+  
+  // Pain swap modal state
+  let showPainSwapModal = false;
+  let painSwapExercise = null;
+  let painSwapLocation = '';
+  let painSwapLevel = 0;
   
   let recentExercises = []; // Exercises from previous days for quick access
   let exerciseHistory = new Map(); // Map of exercise name -> last used data
@@ -358,6 +365,8 @@
 
   function updatePain(exerciseId, field, value) {
     const painValue = Math.max(0, Math.min(10, parseInt(value) || 0));
+    let exerciseForModal = null;
+    
     exercises = exercises.map(ex => {
       if (ex.id === exerciseId) {
         const updated = { ...ex, [field]: painValue };
@@ -365,11 +374,45 @@
         if (painValue > 0 && !exerciseSubstitutions[ex.name]) {
           fetchSubstitutions(ex.name);
         }
+        // Track exercise for modal if pain > 5
+        if (painValue > 5) {
+          exerciseForModal = updated;
+        }
         return updated;
       }
       return ex;
     });
     dispatch('exercisesChanged', exercises);
+    
+    // Show pain swap modal if pain > 5
+    if (exerciseForModal) {
+      painSwapExercise = exerciseForModal;
+      painSwapLocation = field === 'left_shoulder_pain' ? 'Left Shoulder' : 'Elbow';
+      painSwapLevel = painValue;
+      // Wait for substitutions to load, then show modal
+      setTimeout(() => {
+        showPainSwapModal = true;
+      }, 100);
+    }
+  }
+  
+  function handlePainSwap(event) {
+    const { originalExercise, newExerciseName } = event.detail;
+    // Find and update the exercise name
+    exercises = exercises.map(ex => {
+      if (ex.id === originalExercise.id) {
+        return { ...ex, name: newExerciseName, left_shoulder_pain: 0, elbow_pain: 0 };
+      }
+      return ex;
+    });
+    dispatch('exercisesChanged', exercises);
+    showPainSwapModal = false;
+    painSwapExercise = null;
+  }
+  
+  function closePainSwapModal() {
+    showPainSwapModal = false;
+    painSwapExercise = null;
   }
   
   async function fetchSubstitutions(exerciseName) {
@@ -960,6 +1003,19 @@
     {/each}
   </div>
 </div>
+
+<!-- Pain Swap Modal -->
+{#if showPainSwapModal && painSwapExercise}
+  <PainSwapModal 
+    exercise={painSwapExercise}
+    substitutions={exerciseSubstitutions[painSwapExercise.name] || []}
+    painLocation={painSwapLocation}
+    painLevel={painSwapLevel}
+    on:swap={handlePainSwap}
+    on:close={closePainSwapModal}
+    on:continue={closePainSwapModal}
+  />
+{/if}
 
 <style>
   .workout-exercises {

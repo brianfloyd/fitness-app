@@ -20,20 +20,37 @@ const EXERCISE_SUBSTITUTIONS = {
   'bench': ['neutral-grip DB press', 'cable press', 'floor press'],
   'barbell bench': ['neutral-grip DB press', 'cable press', 'floor press'],
   'barbell flat': ['neutral-grip DB press', 'cable press', 'floor press'],
+  'dumbbell flat': ['neutral-grip DB press', 'floor press', 'cable press'],
   'barbell incline': ['neutral-grip incline DB press', 'low-incline cable press'],
+  'dumbbell incline': ['neutral-grip incline DB press', 'low-incline cable press'],
   'chest fly': ['limited-range cable crossover', 'pec deck (partial ROM)', 'svend press'],
   'dumbbell fly': ['limited-range cable crossover', 'pec deck (partial ROM)', 'svend press'],
   'lateral raise': ['light cable lateral raise', 'leaning lateral raise', 'Y-raise'],
   'lateral fly': ['light cable lateral raise', 'leaning lateral raise', 'Y-raise'],
   'shoulder press': ['landmine press', 'high incline DB press', 'cable shoulder press'],
   'overhead press': ['landmine press', 'high incline DB press', 'cable shoulder press'],
+  'press': ['landmine press', 'cable press', 'neutral-grip DB press'],
+  
+  // Back exercises (can aggravate shoulders) -> alternatives
+  'row': ['chest-supported row', 'cable row (neutral grip)', 'machine row'],
+  'dumbbell row': ['chest-supported DB row', 'cable row', 'machine row'],
+  'barbell row': ['chest-supported row', 'cable row (neutral grip)', 'T-bar row'],
+  'lat pulldown': ['neutral-grip pulldown', 'straight-arm pulldown', 'cable row'],
+  'pulldown': ['neutral-grip pulldown', 'straight-arm pulldown', 'cable row'],
+  'pull up': ['neutral-grip pulldown', 'lat pulldown (lighter)', 'cable row'],
+  'pull-up': ['neutral-grip pulldown', 'lat pulldown (lighter)', 'cable row'],
+  'chin up': ['neutral-grip pulldown', 'lat pulldown (lighter)', 'cable row'],
+  'chin-up': ['neutral-grip pulldown', 'lat pulldown (lighter)', 'cable row'],
   
   // Elbow-aggravating exercises -> alternatives
   'skull crusher': ['rope pushdown', 'overhead rope extension', 'diamond push-up'],
   'tricep extension': ['rope pushdown', 'cable kickback', 'close-grip push-up'],
+  'extension': ['rope pushdown', 'cable kickback', 'machine dip'],
+  'pushdown': ['overhead rope extension', 'diamond push-up', 'dips'],
   'straight bar curl': ['hammer curl', 'rope curl', 'EZ bar curl'],
   'barbell curl': ['hammer curl', 'rope curl', 'EZ bar curl'],
   'preacher curl': ['incline DB curl', 'spider curl (lighter)', 'cable curl'],
+  'curl': ['hammer curl', 'cable curl (lighter)', 'rope curl'],
 };
 
 // Find substitutions for an exercise name
