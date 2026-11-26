@@ -20,6 +20,7 @@ const MIGRATIONS = [
   { name: 'fix_foods_id_sequence.sql', path: join(root, 'database/migrations/fix_foods_id_sequence.sql') },
   { name: 'add_waist_and_skate_training.sql', path: join(root, 'database/migrations/add_waist_and_skate_training.sql') },
   { name: 'add_program_settings.sql', path: join(root, 'database/migrations/add_program_settings.sql') },
+  { name: 'add_api_tokens.sql', path: join(root, 'database/migrations/add_api_tokens.sql') },
 ];
 
 /**

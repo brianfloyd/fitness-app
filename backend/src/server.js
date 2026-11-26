@@ -15,6 +15,7 @@ import recipesRoutes from './routes/recipes.js';
 import profilesRoutes from './routes/profiles.js';
 import authRoutes from './routes/auth.js';
 import coachRoutes from './routes/coach.js';
+import mcpRoutes from './mcp/server.js';
 
 dotenv.config();
 
@@ -76,6 +77,7 @@ app.use('/api/recipes', requireProfileId, recipesRoutes);
 app.use('/api/profiles', profilesRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/coach', coachRoutes);
+app.use('/api/mcp', mcpRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
