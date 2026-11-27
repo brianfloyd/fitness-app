@@ -108,8 +108,8 @@
           </div>
           
           <div class="input-group">
-            <label>Unit</label>
-            <select class="unit-select" bind:value={unit}>
+            <label for="portion-unit-select">Unit</label>
+            <select id="portion-unit-select" class="unit-select" bind:value={unit}>
               {#each availableUnits as u}
                 <option value={u}>{u}</option>
               {/each}

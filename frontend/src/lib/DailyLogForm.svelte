@@ -7,9 +7,13 @@
   import SleepTimeInput from './SleepTimeInput.svelte';
   import StravaActivities from './StravaActivities.svelte';
   import WorkoutExercises from './WorkoutExercises.svelte';
+  import SkateTraining from './SkateTraining.svelte';
   import GraphView from './GraphView.svelte';
   import FoodTracker from './FoodTracker.svelte';
   import FitbitDailyMetrics from './FitbitDailyMetrics.svelte';
+  import NutritionProgress from './NutritionProgress.svelte';
+  import WeeklyCheckIn from './WeeklyCheckIn.svelte';
+  import CoachChat from './CoachChat.svelte';
 
   export let mobileView = undefined;
   $: isMobile = mobileView != null;
@@ -25,6 +29,13 @@
   let dayNumber = 1;
   let totalDays = 84;
   let startDate = '';
+  let rampStartDate = null;
+  let programStartDate = null;
+  let blockDurationWeeks = 4;
+  let calorieTargetMin = 2100;
+  let calorieTargetMax = 2200;
+  let proteinTargetMin = 160;
+  let proteinTargetMax = 175;
 
   function getTodayLocal() {
     const d = new Date();
@@ -43,6 +54,55 @@
   // Check if selected date is today
   $: isToday = selectedDate ? selectedDate === getTodayLocal() : false;
   
+  // Calculate program phase based on selected date and settings
+  $: programPhase = (() => {
+    if (!rampStartDate && !programStartDate) return null;
+    
+    // Parse the selected date
+    const parts = selectedDate.split('-');
+    const selected = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    selected.setHours(0, 0, 0, 0);
+    
+    const rampStart = rampStartDate ? (() => {
+      const p = rampStartDate.split('-');
+      const d = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2]));
+      d.setHours(0, 0, 0, 0);
+      return d;
+    })() : null;
+    
+    const progStart = programStartDate ? (() => {
+      const p = programStartDate.split('-');
+      const d = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2]));
+      d.setHours(0, 0, 0, 0);
+      return d;
+    })() : null;
+    
+    if (rampStart && selected < rampStart) {
+      const daysUntil = Math.ceil((rampStart - selected) / (1000 * 60 * 60 * 24));
+      return { phase: 'pre-ramp', label: `${daysUntil}d to ramp`, isRamp: false };
+    }
+    
+    if (rampStart && progStart && selected >= rampStart && selected < progStart) {
+      const dayIn = Math.floor((selected - rampStart) / (1000 * 60 * 60 * 24)) + 1;
+      return { phase: 'ramp', label: `Ramp Day ${dayIn} (50-60%)`, isRamp: true };
+    }
+    
+    if (progStart && selected >= progStart) {
+      const daysSince = Math.floor((selected - progStart) / (1000 * 60 * 60 * 24));
+      const blockDays = blockDurationWeeks * 7;
+      const blockNumber = Math.floor(daysSince / blockDays) + 1;
+      const dayInBlock = (daysSince % blockDays) + 1;
+      const weekInBlock = Math.floor((dayInBlock - 1) / 7) + 1;
+      return { 
+        phase: 'full', 
+        label: `Block ${blockNumber} · Week ${weekInBlock}`,
+        isRamp: false,
+      };
+    }
+    
+    return null;
+  })();
+  
   let photoFile = null;
   let currentPhotoUrl = null;
   let photoMimeType = null;
@@ -50,6 +110,7 @@
   
   let weight = '';
   let fatPercent = '';
+  let waist = '';
   let workoutExercises = []; // Array of exercises with sets
   let protein = '';
   let fat = '';
@@ -57,13 +118,28 @@
   let foods = []; // Array of food entries
   let foodMacros = { protein: 0, fat: 0, carbs: 0, calories: 0 }; // Macros from foods
   
-  // Calculate total calories from foods only
-  $: totalCalories = (() => {
-    const p = foodMacros.protein || 0;
-    const f = foodMacros.fat || 0;
-    const c = foodMacros.carbs || 0;
-    return (p * 4) + (f * 9) + (c * 4);
+  // Use reported calories from foodMacros directly (MacroFactor-style)
+  // Don't recalculate from macros since that ignores Atwater-specific factors
+  $: totalCalories = foodMacros.calories || 0;
+  
+  // Calculate nutrition progress status
+  $: calorieStatus = (() => {
+    if (totalCalories < calorieTargetMin * 0.9) return 'low';
+    if (totalCalories > calorieTargetMax * 1.1) return 'high';
+    if (totalCalories >= calorieTargetMin && totalCalories <= calorieTargetMax) return 'on-target';
+    return 'close';
   })();
+  
+  $: proteinStatus = (() => {
+    const p = foodMacros.protein || 0;
+    if (p < proteinTargetMin * 0.9) return 'low';
+    if (p > proteinTargetMax * 1.1) return 'high';
+    if (p >= proteinTargetMin && p <= proteinTargetMax) return 'on-target';
+    return 'close';
+  })();
+  
+  $: caloriePercent = Math.min(100, (totalCalories / calorieTargetMax) * 100);
+  $: proteinPercent = Math.min(100, ((foodMacros.protein || 0) / proteinTargetMax) * 100);
   
   // Handle food tracker totals
   function handleFoodTotals(event) {
@@ -117,11 +193,16 @@
   let sleepTime = '';
   let sleepScore = '';
   let stravaActivities = []; // Array of { id, link, name, distance, time, type }
+  let skateTrainingSessions = []; // Array of { session_type, distance_miles, duration_minutes, switch_foot_minutes, weak_side_comfort, notes }
   let steps = '';
   let fitbitConnected = false;
   let fitbitSteps = null; // Fitbit steps for header (fetched when connected)
   let fitbitZoneMinutes = null; // Active zone minutes from Fitbit
   let fitbitCaloriesOut = null; // Calories expended from Fitbit
+  
+  // Weekly check-in and coach modals
+  let showWeeklyCheckIn = false;
+  let showCoachChat = false;
   
   // Copy to functionality
   let showCopyModal = false;
@@ -137,6 +218,17 @@
       const settings = await getSettings();
       startDate = settings.start_date || getTodayLocal();
       totalDays = settings.total_days || 84;
+      
+      // Load program phase settings
+      rampStartDate = settings.ramp_start_date || null;
+      programStartDate = settings.program_start_date || null;
+      blockDurationWeeks = settings.block_duration_weeks || 4;
+      
+      // Load nutrition targets
+      calorieTargetMin = settings.calorie_target_min || 2100;
+      calorieTargetMax = settings.calorie_target_max || 2200;
+      proteinTargetMin = settings.protein_target_min || 160;
+      proteinTargetMax = settings.protein_target_max || 175;
       
       // Load goal photo URL if available
       if (settings.has_goal_photo) {
@@ -241,6 +333,7 @@
       // Clear all fields first
       weight = '';
       fatPercent = '';
+      waist = '';
       workoutExercises = [];
       protein = '';
       fat = '';
@@ -250,6 +343,7 @@
         sleepTime = '';
         sleepScore = '';
         stravaActivities = [];
+        skateTrainingSessions = [];
         steps = '';
       currentPhotoUrl = null;
       photoMimeType = null;
@@ -262,6 +356,7 @@
       if (log && logDateStr === date) {
         weight = log.weight || '';
         fatPercent = log.fat_percent || '';
+        waist = log.waist || '';
         // Parse workout exercises from JSON or empty array
         if (log.workout) {
           try {
@@ -339,6 +434,20 @@
           }
         } else {
           stravaActivities = [];
+        }
+        
+        // Parse skate training sessions (stored as JSON string)
+        if (log.skate_training) {
+          try {
+            skateTrainingSessions = JSON.parse(log.skate_training);
+            if (!Array.isArray(skateTrainingSessions)) {
+              skateTrainingSessions = [];
+            }
+          } catch (e) {
+            skateTrainingSessions = [];
+          }
+        } else {
+          skateTrainingSessions = [];
         }
         
         steps = log.steps || '';
@@ -559,6 +668,7 @@
           date: selectedDate,
           weight: weight || null,
           fat_percent: fatPercent || null,
+          waist: waist || null,
           workout: JSON.stringify(workoutExercises || []),
           protein: foodMacros.protein > 0 ? foodMacros.protein : null,
           fat: foodMacros.fat > 0 ? foodMacros.fat : null,
@@ -567,6 +677,7 @@
           sleep_time: formattedSleepTime,
           sleep_score: sleepScore || null,
           strava: stravaJson,
+          skate_training: skateTrainingSessions.length > 0 ? JSON.stringify(skateTrainingSessions) : null,
           steps: steps || null,
         };
         
@@ -615,8 +726,8 @@
   
   // Auto-save reactive statements - trigger save when any field changes
   $: if (isDataLoaded && !loading) {
-    // Watch for changes in weight, fatPercent, sleepTime, sleepScore, steps, foods
-    weight, fatPercent, sleepTime, sleepScore, steps, foods;
+    // Watch for changes in weight, fatPercent, waist, sleepTime, sleepScore, steps, foods
+    weight, fatPercent, waist, sleepTime, sleepScore, steps, foods;
     autoSave();
   }
   
@@ -629,6 +740,12 @@
   // Auto-save when Strava activities change
   $: if (isDataLoaded && !loading) {
     stravaActivities;
+    autoSave();
+  }
+  
+  // Auto-save when skate training sessions change
+  $: if (isDataLoaded && !loading) {
+    skateTrainingSessions;
     autoSave();
   }
   
@@ -703,6 +820,7 @@
           protein={foodMacros.protein || 0}
           zoneMinutes={headerZoneMinutes}
           steps={headerSteps}
+          {programPhase}
         />
         <div class="card mobile-photo-card">
           <div class="mobile-photo-header">
@@ -723,6 +841,7 @@
         <div class="mobile-body-inline">
           <input type="number" step="0.1" bind:value={weight} placeholder="weight" class="mobile-body-input" />
           <input type="number" step="0.1" bind:value={fatPercent} placeholder="body fat" class="mobile-body-input" />
+          <input type="number" step="0.1" bind:value={waist} placeholder="waist" class="mobile-body-input" />
         </div>
       </div>
     {:else if mobileView === 'workout'}
@@ -739,6 +858,7 @@
           protein={foodMacros.protein || 0}
           zoneMinutes={headerZoneMinutes}
           steps={headerSteps}
+          {programPhase}
         />
         <div class="card">
           <div class="form-section">
@@ -776,6 +896,7 @@
           protein={foodMacros.protein || 0}
           zoneMinutes={headerZoneMinutes}
           steps={headerSteps}
+          {programPhase}
         />
         <div class="card">
           <div class="form-section">
@@ -796,6 +917,14 @@
               </div>
             </h3>
             <FoodTracker bind:foods on:totals={handleFoodTotals} on:change={handleFoodsChange} />
+            <NutritionProgress 
+              currentCalories={totalCalories}
+              calorieMin={calorieTargetMin}
+              calorieMax={calorieTargetMax}
+              currentProtein={foodMacros.protein || 0}
+              proteinMin={proteinTargetMin}
+              proteinMax={proteinTargetMax}
+            />
           </div>
         </div>
       </div>
@@ -813,6 +942,7 @@
           protein={foodMacros.protein || 0}
           zoneMinutes={headerZoneMinutes}
           steps={headerSteps}
+          {programPhase}
         />
         <div class="card">
           <div class="form-section">
@@ -853,6 +983,16 @@
             <FitbitDailyMetrics date={selectedDate} connected={fitbitConnected} />
           </div>
         </div>
+        <div class="card">
+          <div class="form-section">
+            <SkateTraining 
+              sessions={skateTrainingSessions}
+              on:sessionsChanged={(e) => {
+                skateTrainingSessions = e.detail;
+              }}
+            />
+          </div>
+        </div>
       </div>
     {/if}
     <div class="status-messages">
@@ -862,7 +1002,19 @@
     </div>
   {:else}
     <!-- Desktop layout -->
-    <DayCounter {dayNumber} {totalDays} onPrevious={navigateToPreviousDay} onNext={navigateToNextDay} volume={totalWorkoutVolume} calories={totalCalories} caloriesExpended={headerCaloriesExpended} protein={foodMacros.protein || 0} zoneMinutes={headerZoneMinutes} steps={headerSteps} />
+    <DayCounter {dayNumber} {totalDays} onPrevious={navigateToPreviousDay} onNext={navigateToNextDay} volume={totalWorkoutVolume} calories={totalCalories} caloriesExpended={headerCaloriesExpended} protein={foodMacros.protein || 0} zoneMinutes={headerZoneMinutes} steps={headerSteps} {programPhase} />
+    
+    <!-- Quick action buttons -->
+    <div class="quick-actions">
+      <button type="button" class="quick-action-btn" on:click={() => showWeeklyCheckIn = true} title="Weekly Check-In">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+        <span>Weekly</span>
+      </button>
+      <button type="button" class="quick-action-btn" on:click={() => showCoachChat = true} title="AI Coach">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+        <span>Coach</span>
+      </button>
+    </div>
     
     <div class="form-layout">
         <!-- Left Column: Photo, Date, Body Composition, and Sleep -->
@@ -921,8 +1073,8 @@
                   {/if}
                 </div>
                 <div class="metric-input">
-                  <label>Start Date</label>
-                  <input type="text" value={formatDateLocal(startDate)} readonly />
+                  <label for="start-date-display">Start Date</label>
+                  <input id="start-date-display" type="text" value={formatDateLocal(startDate)} readonly />
                 </div>
               </div>
             </div>
@@ -950,9 +1102,10 @@
                   </button>
                 </div>
               </h3>
-              <div class="grid grid-2">
+              <div class="grid grid-3">
                 <MetricInput label="Weight" type="number" step="0.1" bind:value={weight} placeholder="lbs" />
                 <MetricInput label="Fat %" type="number" step="0.1" bind:value={fatPercent} placeholder="%" />
+                <MetricInput label="Waist" type="number" step="0.1" bind:value={waist} placeholder="inches" />
               </div>
             </div>
           </div>
@@ -1077,6 +1230,14 @@
                 on:totals={handleFoodTotals}
                 on:change={handleFoodsChange}
               />
+              <NutritionProgress 
+                currentCalories={totalCalories}
+                calorieMin={calorieTargetMin}
+                calorieMax={calorieTargetMax}
+                currentProtein={foodMacros.protein || 0}
+                proteinMin={proteinTargetMin}
+                proteinMax={proteinTargetMax}
+              />
             </div>
           </div>
 
@@ -1097,6 +1258,17 @@
               />
             </div>
           </div>
+          
+          <div class="card">
+            <div class="form-section">
+              <SkateTraining 
+                sessions={skateTrainingSessions}
+                on:sessionsChanged={(e) => {
+                  skateTrainingSessions = e.detail;
+                }}
+              />
+            </div>
+          </div>
         </div>
       </div>
       
@@ -1110,16 +1282,17 @@
 
 <!-- Copy To Modal -->
 {#if showCopyModal}
-  <div class="copy-modal" on:click|self={closeCopyModal}>
-    <div class="copy-modal-content" on:click|stopPropagation>
+  <div class="copy-modal" role="dialog" aria-modal="true" aria-labelledby="copy-modal-title" on:click|self={closeCopyModal} on:keydown={(e) => e.key === 'Escape' && closeCopyModal()}>
+    <div class="copy-modal-content" role="document">
       <div class="copy-header">
-        <h3>Copy {copyCategory === 'photo' ? 'Photo' : copyCategory === 'body' ? 'Body Composition' : copyCategory === 'sleep' ? 'Sleep & Activity' : copyCategory === 'workout' ? 'Workout' : 'Macros'} to Another Date</h3>
+        <h3 id="copy-modal-title">Copy {copyCategory === 'photo' ? 'Photo' : copyCategory === 'body' ? 'Body Composition' : copyCategory === 'sleep' ? 'Sleep & Activity' : copyCategory === 'workout' ? 'Workout' : 'Macros'} to Another Date</h3>
         <button type="button" class="close-btn" on:click={closeCopyModal}>×</button>
       </div>
       <div class="copy-body">
         <div class="form-field">
-          <label>Select Target Date</label>
+          <label for="copy-target-date">Select Target Date</label>
           <input 
+            id="copy-target-date"
             type="date" 
             bind:value={copyTargetDate}
             min={startDate}
@@ -1150,12 +1323,30 @@
 
 <!-- Graph Modal -->
 {#if showGraphModal}
-  <div class="graph-modal" on:click|self={closeGraphModal}>
-    <div class="graph-modal-content" on:click|stopPropagation>
+  <div class="graph-modal" role="dialog" aria-modal="true" aria-label="Data graph" on:click|self={closeGraphModal} on:keydown={(e) => e.key === 'Escape' && closeGraphModal()}>
+    <div class="graph-modal-content" role="document">
       <GraphView 
         category={graphCategory} 
         on:close={closeGraphModal}
       />
+    </div>
+  </div>
+{/if}
+
+<!-- Weekly Check-In Modal -->
+{#if showWeeklyCheckIn}
+  <div class="modal-overlay" role="dialog" aria-modal="true" aria-label="Weekly check-in" on:click|self={() => showWeeklyCheckIn = false} on:keydown={(e) => e.key === 'Escape' && (showWeeklyCheckIn = false)}>
+    <div class="modal-content wide">
+      <WeeklyCheckIn on:close={() => showWeeklyCheckIn = false} />
+    </div>
+  </div>
+{/if}
+
+<!-- Coach Chat Modal -->
+{#if showCoachChat}
+  <div class="modal-overlay" role="dialog" aria-modal="true" aria-label="AI Coach" on:click|self={() => showCoachChat = false} on:keydown={(e) => e.key === 'Escape' && (showCoachChat = false)}>
+    <div class="modal-content wide">
+      <CoachChat on:close={() => showCoachChat = false} />
     </div>
   </div>
 {/if}
@@ -1904,7 +2095,7 @@
 
   .mobile-body-inline {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     gap: var(--spacing-xs);
     flex-shrink: 0;
   }
@@ -1959,5 +2150,96 @@
   .mobile-view-card :global(.form-section) {
     padding: var(--spacing-sm);
     padding-bottom: calc(var(--spacing-xl) + 20px);
+  }
+
+  /* Quick action buttons */
+  .quick-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+    justify-content: flex-end;
+    margin-bottom: var(--spacing-md);
+    padding: 0 var(--spacing-sm);
+  }
+
+  .quick-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--border-radius-sm);
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .quick-action-btn:hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+    border-color: var(--primary);
+  }
+
+  .quick-action-btn svg {
+    flex-shrink: 0;
+  }
+
+  /* Modal overlay for WeeklyCheckIn and CoachChat */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: var(--spacing-md);
+  }
+
+  .modal-content {
+    background: var(--surface);
+    border-radius: var(--border-radius-lg);
+    max-height: 90vh;
+    overflow: auto;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+  }
+
+  .modal-content.wide {
+    width: 100%;
+    max-width: 600px;
+  }
+
+  @media (max-width: 768px) {
+    .quick-actions {
+      position: fixed;
+      bottom: calc(60px + env(safe-area-inset-bottom));
+      right: var(--spacing-sm);
+      flex-direction: column;
+      z-index: 50;
+      margin: 0;
+      padding: 0;
+    }
+
+    .quick-action-btn span {
+      display: none;
+    }
+
+    .quick-action-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .modal-content.wide {
+      max-width: 100%;
+      max-height: 85vh;
+      border-radius: var(--border-radius-md);
+    }
   }
 </style>

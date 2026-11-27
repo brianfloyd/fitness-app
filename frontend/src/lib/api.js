@@ -333,3 +333,44 @@ export async function checkCustomFoodDuplicates({ name, barcode }) {
   ensureOk(response);
   return response.json();
 }
+
+// Program settings API
+export async function updateProgramSettings(settings) {
+  const response = await fetchWithProfile(`${API_BASE}/settings/program`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings),
+  });
+  ensureOk(response);
+  return response.json();
+}
+
+// Coach API
+export async function getCoachStatus() {
+  const response = await fetchWithProfile(`${API_BASE}/coach/status`);
+  ensureOk(response);
+  return response.json();
+}
+
+export async function getWeeklySummary() {
+  const response = await fetchWithProfile(`${API_BASE}/coach/weekly-summary`);
+  ensureOk(response);
+  return response.json();
+}
+
+export async function getExerciseSubstitutions(exercise = null) {
+  const params = exercise ? `?exercise=${encodeURIComponent(exercise)}` : '';
+  const response = await fetchWithProfile(`${API_BASE}/coach/substitutions${params}`);
+  ensureOk(response);
+  return response.json();
+}
+
+export async function chatWithCoach(message, contextDays = 14) {
+  const response = await fetchWithProfile(`${API_BASE}/coach/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, context_days: contextDays }),
+  });
+  ensureOk(response);
+  return response.json();
+}
